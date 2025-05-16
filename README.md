@@ -25,6 +25,43 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Authentication System
+
+This app includes a complete authentication system built with Redux Toolkit, Redux Persist, and RTK Query. The system includes:
+
+- Login page with support for username, email, or phone number
+- Registration page with validation
+- Persistent authentication state using Redux Persist
+- API integration using RTK Query
+
+### Authentication Flow
+
+1. Users can register with username, email, phone, and password
+2. Users can login with username, email, or phone number
+3. Authentication state is persisted across app restarts
+4. Protected routes are only accessible to authenticated users
+
+### API Endpoints
+
+- Login: `http://localhost:3040/api/login`
+- Register: `http://localhost:3040/api/register`
+
+### Redux Store Structure
+
+The Redux store is organized as follows:
+
+- `auth`: Manages authentication state (user data, token, authentication status)
+- `authApi`: Handles API requests for authentication
+
+### Files
+
+- `store/index.ts`: Redux store configuration with Redux Persist
+- `store/slices/authSlice.ts`: Authentication state management
+- `store/api/authApi.ts`: RTK Query API for authentication
+- `store/provider.tsx`: Redux Provider component
+- `app/login.tsx`: Login screen
+- `app/register.tsx`: Registration screen
+
 ## Get a fresh project
 
 When you're ready, run:
