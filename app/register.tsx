@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRegisterMutation } from '@/store/api/authApi';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/store/slices/authSlice';
+import { Input, Text, Icon, Pressable } from 'native-base';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -11,7 +13,9 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [register, { isLoading }] = useRegisterMutation();
   const dispatch = useDispatch();
   const router = useRouter();
@@ -64,7 +68,7 @@ export default function RegisterScreen() {
     try {
       const result = await register({ username, email, phone, password }).unwrap();
       dispatch(setCredentials({ user: result.user, token: result.token }));
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/index');
     } catch (error: any) {
       Alert.alert(
         'Registration Failed',
@@ -77,63 +81,132 @@ export default function RegisterScreen() {
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
         <Text style={styles.title}>Create Account</Text>
-        
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Username</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            key="username-input"
+            w="100%"
+            size="lg"
             placeholder="Enter your username"
             value={username}
             onChangeText={setUsername}
             autoCapitalize="none"
+            autoCorrect={false}
+            borderRadius={8}
+            borderWidth={1}
+            borderColor="#ddd"
+            backgroundColor="#fff"
+            py={3}
+            px={4}
+            disableFullscreenUI={true}
           />
         </View>
-        
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            key="email-input"
+            w="100%"
+            size="lg"
             placeholder="Enter your email"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
+            borderRadius={8}
+            borderWidth={1}
+            borderColor="#ddd"
+            backgroundColor="#fff"
+            py={3}
+            px={4}
+            disableFullscreenUI={true}
           />
         </View>
-        
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Phone</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            key="phone-input"
+            w="100%"
+            size="lg"
             placeholder="Enter your phone number"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
+            borderRadius={8}
+            borderWidth={1}
+            borderColor="#ddd"
+            backgroundColor="#fff"
+            py={3}
+            px={4}
+            disableFullscreenUI={true}
           />
         </View>
-        
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            key="password-input"
+            w="100%"
+            size="lg"
             placeholder="Enter your password"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            type={showPassword ? "text" : "password"}
+            borderRadius={8}
+            borderWidth={1}
+            borderColor="#ddd"
+            backgroundColor="#fff"
+            py={3}
+            px={4}
+            autoCorrect={false}
+            disableFullscreenUI={true}
+            InputRightElement={
+              <Pressable onPress={() => setShowPassword(!showPassword)}>
+                <Icon
+                  as={<MaterialIcons name={showPassword ? "visibility" : "visibility-off"} />}
+                  size={5}
+                  mr="2"
+                  color="muted.400"
+                />
+              </Pressable>
+            }
           />
         </View>
-        
+
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Confirm Password</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            key="confirm-password-input"
+            w="100%"
+            size="lg"
             placeholder="Confirm your password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            secureTextEntry
+            type={showConfirmPassword ? "text" : "password"}
+            borderRadius={8}
+            borderWidth={1}
+            borderColor="#ddd"
+            backgroundColor="#fff"
+            py={3}
+            px={4}
+            autoCorrect={false}
+            disableFullscreenUI={true}
+            InputRightElement={
+              <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                <Icon
+                  as={<MaterialIcons name={showConfirmPassword ? "visibility" : "visibility-off"} />}
+                  size={5}
+                  mr="2"
+                  color="muted.400"
+                />
+              </Pressable>
+            }
           />
         </View>
-        
+
         <TouchableOpacity
           style={styles.button}
           onPress={handleRegister}
@@ -145,7 +218,7 @@ export default function RegisterScreen() {
             <Text style={styles.buttonText}>Register</Text>
           )}
         </TouchableOpacity>
-        
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account?</Text>
           <TouchableOpacity onPress={() => router.push('/login')}>
