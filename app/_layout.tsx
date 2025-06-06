@@ -1,3 +1,4 @@
+// app/_layout.tsx
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
@@ -17,8 +18,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const pathname = usePathname();
 
+  // Protected routes - require authentication
+  const protectedRoutes = ['(tabs)', 'bills'];
+  const isInProtectedRoute = protectedRoutes.includes(segments[0]);
+
   // If we're in a protected route and not authenticated, redirect to login
-  if (!isAuthenticated && segments[0] === '(tabs)') {
+  if (!isAuthenticated && isInProtectedRoute) {
     return <Redirect href="/login" />;
   }
 
@@ -42,21 +47,65 @@ export default function RootLayout() {
   }
 
   return (
-    <ReduxProvider>
-      <NativeBaseProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AuthGuard>
-            <Stack initialRouteName="splash">
-              <Stack.Screen name="splash" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="register" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-          </AuthGuard>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </NativeBaseProvider>
-    </ReduxProvider>
+      <ReduxProvider>
+        <NativeBaseProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <AuthGuard>
+              <Stack
+                  initialRouteName="splash"
+                  screenOptions={{
+                    headerShown: false,
+                    animation: 'slide_from_right',
+                    gestureEnabled: true,
+                  }}
+              >
+                <Stack.Screen
+                    name="splash"
+                    options={{
+                      headerShown: false,
+                      animation: 'fade',
+                    }}
+                />
+                <Stack.Screen
+                    name="login"
+                    options={{
+                      headerShown: false,
+                      animation: 'slide_from_bottom',
+                    }}
+                />
+                <Stack.Screen
+                    name="register"
+                    options={{
+                      headerShown: false,
+                      animation: 'slide_from_bottom',
+                    }}
+                />
+                <Stack.Screen
+                    name="(tabs)"
+                    options={{
+                      headerShown: false,
+                      animation: 'fade',
+                    }}
+                />
+                <Stack.Screen
+                    name="bills"
+                    options={{
+                      headerShown: false,
+                      presentation: 'card',
+                      animation: 'slide_from_right',
+                    }}
+                />
+                <Stack.Screen
+                    name="+not-found"
+                    options={{
+                      title: 'Not Found',
+                    }}
+                />
+              </Stack>
+            </AuthGuard>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </NativeBaseProvider>
+      </ReduxProvider>
   );
 }

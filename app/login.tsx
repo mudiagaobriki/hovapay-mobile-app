@@ -1,5 +1,15 @@
-import React, {useState, useRef, useEffect} from 'react';
-import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
+  StatusBar
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useLoginMutation } from '@/store/api/authApi';
 import { useDispatch } from 'react-redux';
@@ -8,206 +18,360 @@ import { Input, Text, Icon, Pressable, FormControl } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [login, { isLoading }] = useLoginMutation();
   const dispatch = useDispatch();
   const router = useRouter();
-
-  // Create refs for input fields to manage focus
   const passwordInputRef = useRef(null);
 
-  // Add this to check render cycles
   useEffect(() => {
     console.log('LoginScreen rendered');
   });
 
-  // Validation schema using Yup
   const LoginSchema = Yup.object().shape({
-    identifier: Yup.string()
-      .required('Username, email, or phone is required'),
+    identifier: Yup.string().required('Username, email, or phone is required'),
     password: Yup.string()
-      .required('Password is required')
+        .min(8, 'Password must be at least 8 characters')
+        .matches(
+            /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/,
+            'Password must contain uppercase, lowercase, number and special character'
+        )
+        .required('Password is required')
   });
 
   const handleLogin = async (values, { setSubmitting }) => {
     try {
-      const result = await login({ 
-        identifier: values.identifier, 
-        password: values.password 
+      const result = await login({
+        email: values.identifier, // Backend expects 'email' field for identifier
+        password: values.password
       }).unwrap();
-      dispatch(setCredentials({ user: result.user, token: result.token }));
+
+      dispatch(setCredentials({
+        user: result.user,
+        token: result.token
+      }));
+
+      console.log("Successful")
+      // console.log({result}).
+
       router.replace('/(tabs)/index');
-    } catch (error) {
-      Alert.alert(
-        'Login Failed',
-        error.data?.message || 'Something went wrong. Please try again.'
-      );
+    } catch (error: any) {
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.details && error.details.length > 0) {
+        errorMessage = error.details.join(', ');
+      }
+
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-
-      <Formik
-        initialValues={{ identifier: '', password: '' }}
-        validationSchema={LoginSchema}
-        onSubmit={handleLogin}
+      <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
-          <>
-            <View style={styles.inputContainer}>
-              <FormControl isInvalid={touched.identifier && errors.identifier}>
-                <Text style={styles.label}>Username / Email / Phone</Text>
-                <Input
-                  // key="identifier-input"
-                  w="100%"
-                  size="lg"
-                  placeholder="Enter your username, email, or phone"
-                  value={values.identifier}
-                  onChangeText={handleChange('identifier')}
-                  onBlur={handleBlur('identifier')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  borderRadius={8}
-                  borderWidth={1}
-                  borderColor={touched.identifier && errors.identifier ? "red.500" : "#ddd"}
-                  backgroundColor="#fff"
-                  py={3}
-                  px={4}
-                  returnKeyType="next"
-                  onSubmitEditing={() => passwordInputRef.current?.focus()}
-                  blurOnSubmit={false}
-                  disableFullscreenUI={true}
-                />
-                {touched.identifier && errors.identifier && (
-                  <FormControl.ErrorMessage>{errors.identifier}</FormControl.ErrorMessage>
-                )}
-              </FormControl>
-            </View>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-            <View style={styles.inputContainer}>
-              <FormControl isInvalid={touched.password && errors.password}>
-                <Text style={styles.label}>Password</Text>
-                <Input
-                  // key="password-input"
-                  w="100%"
-                  size="lg"
-                  placeholder="Enter your password"
-                  value={values.password}
-                  onChangeText={handleChange('password')}
-                  onBlur={handleBlur('password')}
-                  type={showPassword ? "text" : "password"}
-                  borderRadius={8}
-                  borderWidth={1}
-                  borderColor={touched.password && errors.password ? "red.500" : "#ddd"}
-                  backgroundColor="#fff"
-                  py={3}
-                  px={4}
-                  ref={passwordInputRef}
-                  returnKeyType="done"
-                  onSubmitEditing={() => handleSubmit()}
-                  autoCorrect={false}
-                  disableFullscreenUI={true}
-                  InputRightElement={
-                    <Pressable onPress={() => setShowPassword(!showPassword)}>
-                      <Icon
-                        as={<MaterialIcons name={showPassword ? "visibility" : "visibility-off"} />}
-                        size={5}
-                        mr="2"
-                        color="muted.400"
-                      />
-                    </Pressable>
-                  }
-                />
-                {touched.password && errors.password && (
-                  <FormControl.ErrorMessage>{errors.password}</FormControl.ErrorMessage>
-                )}
-              </FormControl>
+        <LinearGradient
+            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+            style={styles.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.headerContainer}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <MaterialIcons name="lock" size={32} color={COLORS.primary} />
+              </View>
             </View>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subtitleText}>Sign in to your account</Text>
+          </View>
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={handleSubmit}
-              disabled={isLoading || isSubmitting}
+          <View style={styles.formContainer}>
+            <Formik
+                initialValues={{ identifier: '', password: '' }}
+                validationSchema={LoginSchema}
+                onSubmit={handleLogin}
             >
-              {isLoading || isSubmitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Login</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        )}
-      </Formik>
+              {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
+                  <>
+                    <View style={styles.inputWrapper}>
+                      <FormControl isInvalid={touched.identifier && errors.identifier}>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.identifier && errors.identifier && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="person"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <Input
+                              flex={1}
+                              variant="unstyled"
+                              placeholder="Username, email, or phone"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.identifier}
+                              onChangeText={handleChange('identifier')}
+                              onBlur={handleBlur('identifier')}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              returnKeyType="next"
+                              onSubmitEditing={() => passwordInputRef.current?.focus()}
+                              blurOnSubmit={false}
+                              disableFullscreenUI={true}
+                              fontSize={TYPOGRAPHY.fontSizes.base}
+                              color={COLORS.textPrimary}
+                              _focus={{ borderWidth: 0 }}
+                          />
+                        </View>
+                        {touched.identifier && errors.identifier && (
+                            <Text style={styles.errorText}>{errors.identifier}</Text>
+                        )}
+                      </FormControl>
+                    </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Don't have an account?</Text>
-        <TouchableOpacity onPress={() => router.push('/register')}>
-          <Text style={styles.linkText}>Register</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+                    <View style={styles.inputWrapper}>
+                      <FormControl isInvalid={touched.password && errors.password}>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.password && errors.password && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="lock"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <Input
+                              flex={1}
+                              variant="unstyled"
+                              placeholder="Password"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.password}
+                              onChangeText={handleChange('password')}
+                              onBlur={handleBlur('password')}
+                              type={showPassword ? "text" : "password"}
+                              ref={passwordInputRef}
+                              returnKeyType="done"
+                              onSubmitEditing={() => handleSubmit()}
+                              autoCorrect={false}
+                              disableFullscreenUI={true}
+                              fontSize={TYPOGRAPHY.fontSizes.base}
+                              color={COLORS.textPrimary}
+                              _focus={{ borderWidth: 0 }}
+                          />
+                          <Pressable
+                              onPress={() => setShowPassword(!showPassword)}
+                              style={styles.eyeIcon}
+                          >
+                            <MaterialIcons
+                                name={showPassword ? "visibility" : "visibility-off"}
+                                size={20}
+                                color={COLORS.textTertiary}
+                            />
+                          </Pressable>
+                        </View>
+                        {touched.password && errors.password && (
+                            <Text style={styles.errorText}>{errors.password}</Text>
+                        )}
+                      </FormControl>
+                    </View>
+
+                    <TouchableOpacity style={styles.forgotPassword}>
+                      <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                          styles.loginButton,
+                          (isLoading || isSubmitting) && styles.loginButtonDisabled
+                        ]}
+                        onPress={handleSubmit}
+                        disabled={isLoading || isSubmitting}
+                        activeOpacity={0.8}
+                    >
+                      {isLoading || isSubmitting ? (
+                          <ActivityIndicator color={COLORS.textInverse} size="small" />
+                      ) : (
+                          <Text style={styles.loginButtonText}>Sign In</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+              )}
+            </Formik>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => router.push('/register')}>
+                <Text style={styles.linkText}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+      </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
+  gradient: {
+    flex: 1,
+  },
+  headerContainer: {
+    flex: 0.45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? SPACING['4xl'] : SPACING['3xl'],
+    paddingHorizontal: SPACING.xl,
+  },
+  logoContainer: {
+    marginBottom: SPACING.xl,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.withOpacity(COLORS.white, 0.95),
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.lg,
+  },
+  welcomeText: {
+    fontSize: TYPOGRAPHY.fontSizes['4xl'],
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    color: COLORS.textInverse,
+    marginBottom: SPACING.sm,
     textAlign: 'center',
+    lineHeight: TYPOGRAPHY.fontSizes['4xl'] * 1.2,
+    includeFontPadding: false,
+  },
+  subtitleText: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.withOpacity(COLORS.textInverse, 0.8),
+    textAlign: 'center',
+    lineHeight: TYPOGRAPHY.fontSizes.base * 1.3,
+    includeFontPadding: false,
+  },
+  formContainer: {
+    flex: 0.55,
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: RADIUS['3xl'],
+    borderTopRightRadius: RADIUS['3xl'],
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING['3xl'],
+    paddingBottom: SPACING.xl,
+    ...SHADOWS.lg,
+  },
+  inputWrapper: {
+    marginBottom: SPACING.lg,
   },
   inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  button: {
-    backgroundColor: '#007BFF',
-    borderRadius: 8,
-    padding: 15,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.base,
+    paddingVertical: SPACING.xs,
+    minHeight: 56,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+  inputContainerError: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.withOpacity(COLORS.error, 0.05),
+  },
+  inputIcon: {
+    marginRight: SPACING.md,
+  },
+  eyeIcon: {
+    padding: SPACING.xs,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.fontSizes.xs,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+    marginLeft: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: SPACING.xl,
+    paddingVertical: SPACING.xs,
+  },
+  forgotPasswordText: {
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+  },
+  loginButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.xl,
+    minHeight: 56,
+    ...SHADOWS.colored(COLORS.primary),
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    paddingHorizontal: SPACING.base,
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textTertiary,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    gap: 5,
+    alignItems: 'center',
+    marginTop: 'auto',
   },
   footerText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textSecondary,
   },
   linkText: {
-    fontSize: 16,
-    color: '#007BFF',
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
   },
 });

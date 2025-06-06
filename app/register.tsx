@@ -1,291 +1,548 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import {
+  StyleSheet,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Dimensions,
+  StatusBar
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRegisterMutation } from '@/store/api/authApi';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/store/slices/authSlice';
-import { Input, Text, Icon, Pressable } from 'native-base';
+import { Input, Text, Icon, Pressable, FormControl } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Formik } from 'formik';
+import * as Yup from 'yup';
+import { LinearGradient } from 'expo-linear-gradient';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export default function RegisterScreen() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [register, { isLoading }] = useRegisterMutation();
   const dispatch = useDispatch();
   const router = useRouter();
 
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  // Create refs for input fields
+  const emailRef = useRef(null);
+  const phoneRef = useRef(null);
+  const passwordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
 
-  const validatePhone = (phone: string) => {
-    const phoneRegex = /^\+?[0-9]{10,15}$/;
-    return phoneRegex.test(phone);
-  };
+  const RegisterSchema = Yup.object().shape({
+    username: Yup.string()
+        .min(3, 'Username must be at least 3 characters')
+        .required('Username is required'),
+    email: Yup.string()
+        .email('Please enter a valid email address')
+        .required('Email is required'),
+    phone: Yup.string()
+        .matches(/^\+?[1-9]\d{1,14}$/, 'Please enter a valid phone number')
+        .required('Phone number is required'),
+    password: Yup.string()
+        .min(8, 'Password must be at least 8 characters')
+        .matches(
+            /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/,
+            'Password must contain uppercase, lowercase, number and special character'
+        )
+        .required('Password is required'),
+    confirmPassword: Yup.string()
+        .oneOf([Yup.ref('password')], 'Passwords must match')
+        .required('Please confirm your password'),
+  });
 
-  const handleRegister = async () => {
-    // Basic validation
-    if (!username.trim()) {
-      Alert.alert('Error', 'Please enter a username');
-      return;
-    }
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter an email address');
-      return;
-    }
-    if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    if (!phone.trim()) {
-      Alert.alert('Error', 'Please enter a phone number');
-      return;
-    }
-    if (!validatePhone(phone)) {
-      Alert.alert('Error', 'Please enter a valid phone number');
-      return;
-    }
-    if (!password.trim()) {
-      Alert.alert('Error', 'Please enter a password');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
+  const handleRegister = async (values, { setSubmitting }) => {
     try {
-      const result = await register({ username, email, phone, password }).unwrap();
-      dispatch(setCredentials({ user: result.user, token: result.token }));
-      router.replace('/(tabs)/index');
-    } catch (error: any) {
+      const { username, email, phone, password } = values;
+      const result = await register({
+        username,
+        email,
+        phone,
+        password,
+        type: 'user' // Required by your backend
+      }).unwrap();
+
+      // Show success message about email verification
       Alert.alert(
-        'Registration Failed',
-        error.data?.message || 'Something went wrong. Please try again.'
+          'Registration Successful',
+          'Please check your email to verify your account before signing in.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push('/login')
+            }
+          ]
       );
+    } catch (error: any) {
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.details && error.details.length > 0) {
+        errorMessage = error.details.join(', ');
+      }
+
+      Alert.alert('Registration Failed', errorMessage);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Create Account</Text>
+      <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Username</Text>
-          <Input
-            key="username-input"
-            w="100%"
-            size="lg"
-            placeholder="Enter your username"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            autoCorrect={false}
-            borderRadius={8}
-            borderWidth={1}
-            borderColor="#ddd"
-            backgroundColor="#fff"
-            py={3}
-            px={4}
-            disableFullscreenUI={true}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <Input
-            key="email-input"
-            w="100%"
-            size="lg"
-            placeholder="Enter your email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            borderRadius={8}
-            borderWidth={1}
-            borderColor="#ddd"
-            backgroundColor="#fff"
-            py={3}
-            px={4}
-            disableFullscreenUI={true}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Phone</Text>
-          <Input
-            key="phone-input"
-            w="100%"
-            size="lg"
-            placeholder="Enter your phone number"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            borderRadius={8}
-            borderWidth={1}
-            borderColor="#ddd"
-            backgroundColor="#fff"
-            py={3}
-            px={4}
-            disableFullscreenUI={true}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
-          <Input
-            key="password-input"
-            w="100%"
-            size="lg"
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            type={showPassword ? "text" : "password"}
-            borderRadius={8}
-            borderWidth={1}
-            borderColor="#ddd"
-            backgroundColor="#fff"
-            py={3}
-            px={4}
-            autoCorrect={false}
-            disableFullscreenUI={true}
-            InputRightElement={
-              <Pressable onPress={() => setShowPassword(!showPassword)}>
-                <Icon
-                  as={<MaterialIcons name={showPassword ? "visibility" : "visibility-off"} />}
-                  size={5}
-                  mr="2"
-                  color="muted.400"
-                />
-              </Pressable>
-            }
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Confirm Password</Text>
-          <Input
-            key="confirm-password-input"
-            w="100%"
-            size="lg"
-            placeholder="Confirm your password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            type={showConfirmPassword ? "text" : "password"}
-            borderRadius={8}
-            borderWidth={1}
-            borderColor="#ddd"
-            backgroundColor="#fff"
-            py={3}
-            px={4}
-            autoCorrect={false}
-            disableFullscreenUI={true}
-            InputRightElement={
-              <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                <Icon
-                  as={<MaterialIcons name={showConfirmPassword ? "visibility" : "visibility-off"} />}
-                  size={5}
-                  mr="2"
-                  color="muted.400"
-                />
-              </Pressable>
-            }
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleRegister}
-          disabled={isLoading}
+        <LinearGradient
+            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+            style={styles.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Register</Text>
-          )}
-        </TouchableOpacity>
+          <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.headerContainer}>
+              <View style={styles.logoContainer}>
+                <View style={styles.logoCircle}>
+                  <MaterialIcons name="person-add" size={32} color={COLORS.primary} />
+                </View>
+              </View>
+              <Text style={styles.welcomeText}>Create Account</Text>
+              <Text style={styles.subtitleText}>Join us and get started</Text>
+            </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => router.push('/login')}>
-            <Text style={styles.linkText}>Login</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+            <View style={styles.formContainer}>
+              <Formik
+                  initialValues={{
+                    username: '',
+                    email: '',
+                    phone: '',
+                    password: '',
+                    confirmPassword: ''
+                  }}
+                  validationSchema={RegisterSchema}
+                  onSubmit={handleRegister}
+              >
+                {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
+                    <>
+                      <View style={styles.inputWrapper}>
+                        <FormControl isInvalid={touched.username && errors.username}>
+                          <View style={[
+                            styles.inputContainer,
+                            touched.username && errors.username && styles.inputContainerError
+                          ]}>
+                            <MaterialIcons
+                                name="person"
+                                size={20}
+                                color={COLORS.textTertiary}
+                                style={styles.inputIcon}
+                            />
+                            <Input
+                                flex={1}
+                                variant="unstyled"
+                                placeholder="Username"
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={values.username}
+                                onChangeText={handleChange('username')}
+                                onBlur={handleBlur('username')}
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                returnKeyType="next"
+                                onSubmitEditing={() => emailRef.current?.focus()}
+                                blurOnSubmit={false}
+                                disableFullscreenUI={true}
+                                fontSize={TYPOGRAPHY.fontSizes.base}
+                                color={COLORS.textPrimary}
+                                _focus={{ borderWidth: 0 }}
+                            />
+                          </View>
+                          {touched.username && errors.username && (
+                              <Text style={styles.errorText}>{errors.username}</Text>
+                          )}
+                        </FormControl>
+                      </View>
+
+                      <View style={styles.inputWrapper}>
+                        <FormControl isInvalid={touched.email && errors.email}>
+                          <View style={[
+                            styles.inputContainer,
+                            touched.email && errors.email && styles.inputContainerError
+                          ]}>
+                            <MaterialIcons
+                                name="email"
+                                size={20}
+                                color={COLORS.textTertiary}
+                                style={styles.inputIcon}
+                            />
+                            <Input
+                                flex={1}
+                                variant="unstyled"
+                                placeholder="Email address"
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={values.email}
+                                onChangeText={handleChange('email')}
+                                onBlur={handleBlur('email')}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                ref={emailRef}
+                                returnKeyType="next"
+                                onSubmitEditing={() => phoneRef.current?.focus()}
+                                blurOnSubmit={false}
+                                disableFullscreenUI={true}
+                                fontSize={TYPOGRAPHY.fontSizes.base}
+                                color={COLORS.textPrimary}
+                                _focus={{ borderWidth: 0 }}
+                            />
+                          </View>
+                          {touched.email && errors.email && (
+                              <Text style={styles.errorText}>{errors.email}</Text>
+                          )}
+                        </FormControl>
+                      </View>
+
+                      <View style={styles.inputWrapper}>
+                        <FormControl isInvalid={touched.phone && errors.phone}>
+                          <View style={[
+                            styles.inputContainer,
+                            touched.phone && errors.phone && styles.inputContainerError
+                          ]}>
+                            <MaterialIcons
+                                name="phone"
+                                size={20}
+                                color={COLORS.textTertiary}
+                                style={styles.inputIcon}
+                            />
+                            <Input
+                                flex={1}
+                                variant="unstyled"
+                                placeholder="Phone number"
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={values.phone}
+                                onChangeText={handleChange('phone')}
+                                onBlur={handleBlur('phone')}
+                                keyboardType="phone-pad"
+                                ref={phoneRef}
+                                returnKeyType="next"
+                                onSubmitEditing={() => passwordRef.current?.focus()}
+                                blurOnSubmit={false}
+                                disableFullscreenUI={true}
+                                fontSize={TYPOGRAPHY.fontSizes.base}
+                                color={COLORS.textPrimary}
+                                _focus={{ borderWidth: 0 }}
+                            />
+                          </View>
+                          {touched.phone && errors.phone && (
+                              <Text style={styles.errorText}>{errors.phone}</Text>
+                          )}
+                        </FormControl>
+                      </View>
+
+                      <View style={styles.inputWrapper}>
+                        <FormControl isInvalid={touched.password && errors.password}>
+                          <View style={[
+                            styles.inputContainer,
+                            touched.password && errors.password && styles.inputContainerError
+                          ]}>
+                            <MaterialIcons
+                                name="lock"
+                                size={20}
+                                color={COLORS.textTertiary}
+                                style={styles.inputIcon}
+                            />
+                            <Input
+                                flex={1}
+                                variant="unstyled"
+                                placeholder="Password"
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={values.password}
+                                onChangeText={handleChange('password')}
+                                onBlur={handleBlur('password')}
+                                type={showPassword ? "text" : "password"}
+                                ref={passwordRef}
+                                returnKeyType="next"
+                                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                                blurOnSubmit={false}
+                                autoCorrect={false}
+                                disableFullscreenUI={true}
+                                fontSize={TYPOGRAPHY.fontSizes.base}
+                                color={COLORS.textPrimary}
+                                _focus={{ borderWidth: 0 }}
+                            />
+                            <Pressable
+                                onPress={() => setShowPassword(!showPassword)}
+                                style={styles.eyeIcon}
+                            >
+                              <MaterialIcons
+                                  name={showPassword ? "visibility" : "visibility-off"}
+                                  size={20}
+                                  color={COLORS.textTertiary}
+                              />
+                            </Pressable>
+                          </View>
+                          {touched.password && errors.password && (
+                              <Text style={styles.errorText}>{errors.password}</Text>
+                          )}
+                        </FormControl>
+                      </View>
+
+                      <View style={styles.inputWrapper}>
+                        <FormControl isInvalid={touched.confirmPassword && errors.confirmPassword}>
+                          <View style={[
+                            styles.inputContainer,
+                            touched.confirmPassword && errors.confirmPassword && styles.inputContainerError
+                          ]}>
+                            <MaterialIcons
+                                name="lock"
+                                size={20}
+                                color={COLORS.textTertiary}
+                                style={styles.inputIcon}
+                            />
+                            <Input
+                                flex={1}
+                                variant="unstyled"
+                                placeholder="Confirm password"
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={values.confirmPassword}
+                                onChangeText={handleChange('confirmPassword')}
+                                onBlur={handleBlur('confirmPassword')}
+                                type={showConfirmPassword ? "text" : "password"}
+                                ref={confirmPasswordRef}
+                                returnKeyType="done"
+                                onSubmitEditing={() => handleSubmit()}
+                                autoCorrect={false}
+                                disableFullscreenUI={true}
+                                fontSize={TYPOGRAPHY.fontSizes.base}
+                                color={COLORS.textPrimary}
+                                _focus={{ borderWidth: 0 }}
+                            />
+                            <Pressable
+                                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                style={styles.eyeIcon}
+                            >
+                              <MaterialIcons
+                                  name={showConfirmPassword ? "visibility" : "visibility-off"}
+                                  size={20}
+                                  color={COLORS.textTertiary}
+                              />
+                            </Pressable>
+                          </View>
+                          {touched.confirmPassword && errors.confirmPassword && (
+                              <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                          )}
+                        </FormControl>
+                      </View>
+
+                      <TouchableOpacity
+                          style={[
+                            styles.registerButton,
+                            (isLoading || isSubmitting) && styles.registerButtonDisabled
+                          ]}
+                          onPress={handleSubmit}
+                          disabled={isLoading || isSubmitting}
+                          activeOpacity={0.8}
+                      >
+                        {isLoading || isSubmitting ? (
+                            <ActivityIndicator color={COLORS.textInverse} size="small" />
+                        ) : (
+                            <Text style={styles.registerButtonText}>Create Account</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                )}
+              </Formik>
+
+              <View style={styles.termsContainer}>
+                <Text style={styles.termsText}>
+                  By creating an account, you agree to our{' '}
+                  <Text style={styles.termsLink}>Terms of Service</Text>
+                  {' '}and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+              </View>
+
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => router.push('/login')}>
+                  <Text style={styles.linkText}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </LinearGradient>
+      </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-  },
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
+  gradient: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  headerContainer: {
+    paddingTop: Platform.OS === 'ios' ? SPACING['4xl'] : SPACING['3xl'],
+    paddingBottom: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    marginBottom: SPACING.xl,
+  },
+  logoCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.withOpacity(COLORS.white, 0.95),
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.lg,
+  },
+  welcomeText: {
+    fontSize: TYPOGRAPHY.fontSizes['4xl'],
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    color: COLORS.textInverse,
+    marginBottom: SPACING.sm,
     textAlign: 'center',
+    lineHeight: TYPOGRAPHY.fontSizes['4xl'] * 1.2,
+    includeFontPadding: false,
+  },
+  subtitleText: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.withOpacity(COLORS.textInverse, 0.8),
+    textAlign: 'center',
+    lineHeight: TYPOGRAPHY.fontSizes.base * 1.3,
+    includeFontPadding: false,
+  },
+  formContainer: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: RADIUS['3xl'],
+    borderTopRightRadius: RADIUS['3xl'],
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING['3xl'],
+    paddingBottom: SPACING['3xl'],
+    ...SHADOWS.lg,
+    minHeight: height * 0.75,
+  },
+  inputWrapper: {
+    marginBottom: SPACING.lg,
   },
   inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  button: {
-    backgroundColor: '#007BFF',
-    borderRadius: 8,
-    padding: 15,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.base,
+    paddingVertical: SPACING.xs,
+    minHeight: 56,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+  inputContainerError: {
+    borderColor: COLORS.error,
+    backgroundColor: COLORS.withOpacity(COLORS.error, 0.05),
+  },
+  inputIcon: {
+    marginRight: SPACING.md,
+  },
+  eyeIcon: {
+    padding: SPACING.xs,
+  },
+  errorText: {
+    fontSize: TYPOGRAPHY.fontSizes.xs,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+    marginLeft: SPACING.xs,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+  },
+  registerButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.base,
+    minHeight: 56,
+    ...SHADOWS.colored(COLORS.primary),
+  },
+  registerButtonDisabled: {
+    opacity: 0.7,
+  },
+  registerButtonText: {
+    color: COLORS.textInverse,
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
+  },
+  termsContainer: {
+    marginBottom: SPACING.xl,
+    paddingHorizontal: SPACING.sm,
+  },
+  termsText: {
+    fontSize: TYPOGRAPHY.fontSizes.xs,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: TYPOGRAPHY.lineHeights.relaxed * TYPOGRAPHY.fontSizes.xs,
+  },
+  termsLink: {
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.border,
+  },
+  dividerText: {
+    paddingHorizontal: SPACING.base,
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textTertiary,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    gap: 5,
+    alignItems: 'center',
   },
   footerText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textSecondary,
   },
   linkText: {
-    fontSize: 16,
-    color: '#007BFF',
-    fontWeight: '600',
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
   },
 });
