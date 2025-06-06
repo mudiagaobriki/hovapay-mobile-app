@@ -257,7 +257,7 @@ export default function FundWalletScreen() {
                 <View style={styles.balanceCard}>
                     <Text style={styles.balanceLabel}>Current Balance</Text>
                     <Text style={styles.balanceAmount}>
-                        {walletData ? formatCurrency(walletData.balance) : '₦0.00'}
+                        {walletData ? formatCurrency(walletData?.data?.balance) : '₦0.00'}
                     </Text>
                 </View>
             </LinearGradient>

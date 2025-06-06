@@ -35,7 +35,7 @@ interface ApiError {
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:3040/api', // Your backend URL
+    baseUrl: 'http://192.168.148.122:3040/api', // Your backend URL
     prepareHeaders: (headers, { getState }) => {
       // Get the token from the state
       const token = (getState() as RootState).auth.token;

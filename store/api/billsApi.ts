@@ -89,7 +89,7 @@ interface Transaction {
 export const billsApi = createApi({
   reducerPath: 'billsApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://localhost:3040/api',
+    baseUrl: 'http://192.168.148.122:3040/api',
     prepareHeaders: (headers, { getState }) => {
       const token = (getState() as RootState).auth.token;
       if (token) {

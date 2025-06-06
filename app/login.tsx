@@ -8,13 +8,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  StatusBar
+  StatusBar,
+  TextInput,
+  Text,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useLoginMutation } from '@/store/api/authApi';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/store/slices/authSlice';
-import { Input, Text, Icon, Pressable, FormControl } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -28,11 +29,11 @@ export default function LoginScreen() {
   const [login, { isLoading }] = useLoginMutation();
   const dispatch = useDispatch();
   const router = useRouter();
-  const passwordInputRef = useRef(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     console.log('LoginScreen rendered');
-  });
+  }, []);
 
   const LoginSchema = Yup.object().shape({
     identifier: Yup.string().required('Username, email, or phone is required'),
@@ -45,33 +46,66 @@ export default function LoginScreen() {
         .required('Password is required')
   });
 
-  const handleLogin = async (values, { setSubmitting }) => {
+  const handleLogin = async (values: any, { setSubmitting }: any) => {
+    console.log('Login attempt started with values:', {
+      identifier: values.identifier,
+      passwordLength: values.password?.length || 0
+    });
+
     try {
+      console.log('Calling login API...');
+
       const result = await login({
         email: values.identifier, // Backend expects 'email' field for identifier
         password: values.password
       }).unwrap();
+
+      console.log('Login API response received:', {
+        hasUser: !!result.user,
+        hasToken: !!result.token,
+        userEmail: result.user?.email
+      });
 
       dispatch(setCredentials({
         user: result.user,
         token: result.token
       }));
 
-      console.log("Successful")
-      // console.log({result}).
+      console.log("Login successful, navigating to dashboard");
 
-      router.replace('/(tabs)/index');
+      // Use setTimeout to ensure state is updated before navigation
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, 100);
+
     } catch (error: any) {
+      console.error('Login error details:', {
+        error,
+        errorData: error?.data,
+        errorMessage: error?.message,
+        errorStatus: error?.status,
+        errorDetails: error?.details
+      });
+
       let errorMessage = 'Something went wrong. Please try again.';
 
-      if (error?.message) {
+      // Handle different error structures
+      if (error?.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error?.message) {
         errorMessage = error.message;
+      } else if (error?.data?.details && error.data.details.length > 0) {
+        errorMessage = error.data.details.join(', ');
       } else if (error?.details && error.details.length > 0) {
         errorMessage = error.details.join(', ');
+      } else if (typeof error === 'string') {
+        errorMessage = error;
       }
 
+      console.log('Showing error alert:', errorMessage);
       Alert.alert('Login Failed', errorMessage);
     } finally {
+      console.log('Login attempt finished, setting submitting to false');
       setSubmitting(false);
     }
   };
@@ -108,87 +142,73 @@ export default function LoginScreen() {
               {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
                   <>
                     <View style={styles.inputWrapper}>
-                      <FormControl isInvalid={touched.identifier && errors.identifier}>
-                        <View style={[
-                          styles.inputContainer,
-                          touched.identifier && errors.identifier && styles.inputContainerError
-                        ]}>
-                          <MaterialIcons
-                              name="person"
-                              size={20}
-                              color={COLORS.textTertiary}
-                              style={styles.inputIcon}
-                          />
-                          <Input
-                              flex={1}
-                              variant="unstyled"
-                              placeholder="Username, email, or phone"
-                              placeholderTextColor={COLORS.textTertiary}
-                              value={values.identifier}
-                              onChangeText={handleChange('identifier')}
-                              onBlur={handleBlur('identifier')}
-                              autoCapitalize="none"
-                              autoCorrect={false}
-                              returnKeyType="next"
-                              onSubmitEditing={() => passwordInputRef.current?.focus()}
-                              blurOnSubmit={false}
-                              disableFullscreenUI={true}
-                              fontSize={TYPOGRAPHY.fontSizes.base}
-                              color={COLORS.textPrimary}
-                              _focus={{ borderWidth: 0 }}
-                          />
-                        </View>
-                        {touched.identifier && errors.identifier && (
-                            <Text style={styles.errorText}>{errors.identifier}</Text>
-                        )}
-                      </FormControl>
+                      <View style={[
+                        styles.inputContainer,
+                        touched.identifier && errors.identifier && styles.inputContainerError
+                      ]}>
+                        <MaterialIcons
+                            name="person"
+                            size={20}
+                            color={COLORS.textTertiary}
+                            style={styles.inputIcon}
+                        />
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Username, email, or phone"
+                            placeholderTextColor={COLORS.textTertiary}
+                            value={values.identifier}
+                            onChangeText={handleChange('identifier')}
+                            onBlur={handleBlur('identifier')}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            returnKeyType="next"
+                            onSubmitEditing={() => passwordInputRef.current?.focus()}
+                            blurOnSubmit={false}
+                        />
+                      </View>
+                      {touched.identifier && errors.identifier && (
+                          <Text style={styles.errorText}>{errors.identifier}</Text>
+                      )}
                     </View>
 
                     <View style={styles.inputWrapper}>
-                      <FormControl isInvalid={touched.password && errors.password}>
-                        <View style={[
-                          styles.inputContainer,
-                          touched.password && errors.password && styles.inputContainerError
-                        ]}>
+                      <View style={[
+                        styles.inputContainer,
+                        touched.password && errors.password && styles.inputContainerError
+                      ]}>
+                        <MaterialIcons
+                            name="lock"
+                            size={20}
+                            color={COLORS.textTertiary}
+                            style={styles.inputIcon}
+                        />
+                        <TextInput
+                            ref={passwordInputRef}
+                            style={styles.textInput}
+                            placeholder="Password"
+                            placeholderTextColor={COLORS.textTertiary}
+                            value={values.password}
+                            onChangeText={handleChange('password')}
+                            onBlur={handleBlur('password')}
+                            secureTextEntry={!showPassword}
+                            returnKeyType="done"
+                            onSubmitEditing={() => handleSubmit()}
+                            autoCorrect={false}
+                        />
+                        <TouchableOpacity
+                            onPress={() => setShowPassword(!showPassword)}
+                            style={styles.eyeIcon}
+                        >
                           <MaterialIcons
-                              name="lock"
+                              name={showPassword ? "visibility" : "visibility-off"}
                               size={20}
                               color={COLORS.textTertiary}
-                              style={styles.inputIcon}
                           />
-                          <Input
-                              flex={1}
-                              variant="unstyled"
-                              placeholder="Password"
-                              placeholderTextColor={COLORS.textTertiary}
-                              value={values.password}
-                              onChangeText={handleChange('password')}
-                              onBlur={handleBlur('password')}
-                              type={showPassword ? "text" : "password"}
-                              ref={passwordInputRef}
-                              returnKeyType="done"
-                              onSubmitEditing={() => handleSubmit()}
-                              autoCorrect={false}
-                              disableFullscreenUI={true}
-                              fontSize={TYPOGRAPHY.fontSizes.base}
-                              color={COLORS.textPrimary}
-                              _focus={{ borderWidth: 0 }}
-                          />
-                          <Pressable
-                              onPress={() => setShowPassword(!showPassword)}
-                              style={styles.eyeIcon}
-                          >
-                            <MaterialIcons
-                                name={showPassword ? "visibility" : "visibility-off"}
-                                size={20}
-                                color={COLORS.textTertiary}
-                            />
-                          </Pressable>
-                        </View>
-                        {touched.password && errors.password && (
-                            <Text style={styles.errorText}>{errors.password}</Text>
-                        )}
-                      </FormControl>
+                        </TouchableOpacity>
+                      </View>
+                      {touched.password && errors.password && (
+                          <Text style={styles.errorText}>{errors.password}</Text>
+                      )}
                     </View>
 
                     <TouchableOpacity style={styles.forgotPassword}>
@@ -200,12 +220,24 @@ export default function LoginScreen() {
                           styles.loginButton,
                           (isLoading || isSubmitting) && styles.loginButtonDisabled
                         ]}
-                        onPress={handleSubmit}
+                        onPress={() => {
+                          console.log('Login button pressed');
+                          console.log('Form values:', values);
+                          console.log('Form errors:', errors);
+                          console.log('Is submitting:', isSubmitting);
+                          console.log('Is loading:', isLoading);
+                          handleSubmit();
+                        }}
                         disabled={isLoading || isSubmitting}
                         activeOpacity={0.8}
                     >
                       {isLoading || isSubmitting ? (
-                          <ActivityIndicator color={COLORS.textInverse} size="small" />
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <ActivityIndicator color={COLORS.textInverse} size="small" />
+                            <Text style={[styles.loginButtonText, { marginLeft: 8 }]}>
+                              {isLoading ? 'Signing In...' : 'Processing...'}
+                            </Text>
+                          </View>
                       ) : (
                           <Text style={styles.loginButtonText}>Sign In</Text>
                       )}
@@ -265,14 +297,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSizes['4xl'] * 1.2,
-    includeFontPadding: false,
   },
   subtitleText: {
     fontSize: TYPOGRAPHY.fontSizes.base,
     color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSizes.base * 1.3,
-    includeFontPadding: false,
   },
   formContainer: {
     flex: 0.55,
@@ -304,6 +334,12 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     marginRight: SPACING.md,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.textPrimary,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
   },
   eyeIcon: {
     padding: SPACING.xs,

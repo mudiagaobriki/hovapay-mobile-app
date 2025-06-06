@@ -9,13 +9,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  StatusBar
+  StatusBar,
+  TextInput,
+  Text,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useRegisterMutation } from '@/store/api/authApi';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '@/store/slices/authSlice';
-import { Input, Text, Icon, Pressable, FormControl } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -32,10 +33,10 @@ export default function RegisterScreen() {
   const router = useRouter();
 
   // Create refs for input fields
-  const emailRef = useRef(null);
-  const phoneRef = useRef(null);
-  const passwordRef = useRef(null);
-  const confirmPasswordRef = useRef(null);
+  const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
   const RegisterSchema = Yup.object().shape({
     username: Yup.string()
@@ -59,7 +60,7 @@ export default function RegisterScreen() {
         .required('Please confirm your password'),
   });
 
-  const handleRegister = async (values, { setSubmitting }) => {
+  const handleRegister = async (values: any, { setSubmitting }: any) => {
     try {
       const { username, email, phone, password } = values;
       const result = await register({
@@ -140,211 +141,176 @@ export default function RegisterScreen() {
                 {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
                     <>
                       <View style={styles.inputWrapper}>
-                        <FormControl isInvalid={touched.username && errors.username}>
-                          <View style={[
-                            styles.inputContainer,
-                            touched.username && errors.username && styles.inputContainerError
-                          ]}>
-                            <MaterialIcons
-                                name="person"
-                                size={20}
-                                color={COLORS.textTertiary}
-                                style={styles.inputIcon}
-                            />
-                            <Input
-                                flex={1}
-                                variant="unstyled"
-                                placeholder="Username"
-                                placeholderTextColor={COLORS.textTertiary}
-                                value={values.username}
-                                onChangeText={handleChange('username')}
-                                onBlur={handleBlur('username')}
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                returnKeyType="next"
-                                onSubmitEditing={() => emailRef.current?.focus()}
-                                blurOnSubmit={false}
-                                disableFullscreenUI={true}
-                                fontSize={TYPOGRAPHY.fontSizes.base}
-                                color={COLORS.textPrimary}
-                                _focus={{ borderWidth: 0 }}
-                            />
-                          </View>
-                          {touched.username && errors.username && (
-                              <Text style={styles.errorText}>{errors.username}</Text>
-                          )}
-                        </FormControl>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.username && errors.username && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="person"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <TextInput
+                              style={styles.textInput}
+                              placeholder="Username"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.username}
+                              onChangeText={handleChange('username')}
+                              onBlur={handleBlur('username')}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              returnKeyType="next"
+                              onSubmitEditing={() => emailRef.current?.focus()}
+                              blurOnSubmit={false}
+                          />
+                        </View>
+                        {touched.username && errors.username && (
+                            <Text style={styles.errorText}>{errors.username}</Text>
+                        )}
                       </View>
 
                       <View style={styles.inputWrapper}>
-                        <FormControl isInvalid={touched.email && errors.email}>
-                          <View style={[
-                            styles.inputContainer,
-                            touched.email && errors.email && styles.inputContainerError
-                          ]}>
-                            <MaterialIcons
-                                name="email"
-                                size={20}
-                                color={COLORS.textTertiary}
-                                style={styles.inputIcon}
-                            />
-                            <Input
-                                flex={1}
-                                variant="unstyled"
-                                placeholder="Email address"
-                                placeholderTextColor={COLORS.textTertiary}
-                                value={values.email}
-                                onChangeText={handleChange('email')}
-                                onBlur={handleBlur('email')}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                                autoCorrect={false}
-                                ref={emailRef}
-                                returnKeyType="next"
-                                onSubmitEditing={() => phoneRef.current?.focus()}
-                                blurOnSubmit={false}
-                                disableFullscreenUI={true}
-                                fontSize={TYPOGRAPHY.fontSizes.base}
-                                color={COLORS.textPrimary}
-                                _focus={{ borderWidth: 0 }}
-                            />
-                          </View>
-                          {touched.email && errors.email && (
-                              <Text style={styles.errorText}>{errors.email}</Text>
-                          )}
-                        </FormControl>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.email && errors.email && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="email"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <TextInput
+                              ref={emailRef}
+                              style={styles.textInput}
+                              placeholder="Email address"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.email}
+                              onChangeText={handleChange('email')}
+                              onBlur={handleBlur('email')}
+                              keyboardType="email-address"
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              returnKeyType="next"
+                              onSubmitEditing={() => phoneRef.current?.focus()}
+                              blurOnSubmit={false}
+                          />
+                        </View>
+                        {touched.email && errors.email && (
+                            <Text style={styles.errorText}>{errors.email}</Text>
+                        )}
                       </View>
 
                       <View style={styles.inputWrapper}>
-                        <FormControl isInvalid={touched.phone && errors.phone}>
-                          <View style={[
-                            styles.inputContainer,
-                            touched.phone && errors.phone && styles.inputContainerError
-                          ]}>
-                            <MaterialIcons
-                                name="phone"
-                                size={20}
-                                color={COLORS.textTertiary}
-                                style={styles.inputIcon}
-                            />
-                            <Input
-                                flex={1}
-                                variant="unstyled"
-                                placeholder="Phone number"
-                                placeholderTextColor={COLORS.textTertiary}
-                                value={values.phone}
-                                onChangeText={handleChange('phone')}
-                                onBlur={handleBlur('phone')}
-                                keyboardType="phone-pad"
-                                ref={phoneRef}
-                                returnKeyType="next"
-                                onSubmitEditing={() => passwordRef.current?.focus()}
-                                blurOnSubmit={false}
-                                disableFullscreenUI={true}
-                                fontSize={TYPOGRAPHY.fontSizes.base}
-                                color={COLORS.textPrimary}
-                                _focus={{ borderWidth: 0 }}
-                            />
-                          </View>
-                          {touched.phone && errors.phone && (
-                              <Text style={styles.errorText}>{errors.phone}</Text>
-                          )}
-                        </FormControl>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.phone && errors.phone && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="phone"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <TextInput
+                              ref={phoneRef}
+                              style={styles.textInput}
+                              placeholder="Phone number"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.phone}
+                              onChangeText={handleChange('phone')}
+                              onBlur={handleBlur('phone')}
+                              keyboardType="phone-pad"
+                              returnKeyType="next"
+                              onSubmitEditing={() => passwordRef.current?.focus()}
+                              blurOnSubmit={false}
+                          />
+                        </View>
+                        {touched.phone && errors.phone && (
+                            <Text style={styles.errorText}>{errors.phone}</Text>
+                        )}
                       </View>
 
                       <View style={styles.inputWrapper}>
-                        <FormControl isInvalid={touched.password && errors.password}>
-                          <View style={[
-                            styles.inputContainer,
-                            touched.password && errors.password && styles.inputContainerError
-                          ]}>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.password && errors.password && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="lock"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <TextInput
+                              ref={passwordRef}
+                              style={styles.textInput}
+                              placeholder="Password"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.password}
+                              onChangeText={handleChange('password')}
+                              onBlur={handleBlur('password')}
+                              secureTextEntry={!showPassword}
+                              returnKeyType="next"
+                              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                              blurOnSubmit={false}
+                              autoCorrect={false}
+                          />
+                          <TouchableOpacity
+                              onPress={() => setShowPassword(!showPassword)}
+                              style={styles.eyeIcon}
+                          >
                             <MaterialIcons
-                                name="lock"
+                                name={showPassword ? "visibility" : "visibility-off"}
                                 size={20}
                                 color={COLORS.textTertiary}
-                                style={styles.inputIcon}
                             />
-                            <Input
-                                flex={1}
-                                variant="unstyled"
-                                placeholder="Password"
-                                placeholderTextColor={COLORS.textTertiary}
-                                value={values.password}
-                                onChangeText={handleChange('password')}
-                                onBlur={handleBlur('password')}
-                                type={showPassword ? "text" : "password"}
-                                ref={passwordRef}
-                                returnKeyType="next"
-                                onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-                                blurOnSubmit={false}
-                                autoCorrect={false}
-                                disableFullscreenUI={true}
-                                fontSize={TYPOGRAPHY.fontSizes.base}
-                                color={COLORS.textPrimary}
-                                _focus={{ borderWidth: 0 }}
-                            />
-                            <Pressable
-                                onPress={() => setShowPassword(!showPassword)}
-                                style={styles.eyeIcon}
-                            >
-                              <MaterialIcons
-                                  name={showPassword ? "visibility" : "visibility-off"}
-                                  size={20}
-                                  color={COLORS.textTertiary}
-                              />
-                            </Pressable>
-                          </View>
-                          {touched.password && errors.password && (
-                              <Text style={styles.errorText}>{errors.password}</Text>
-                          )}
-                        </FormControl>
+                          </TouchableOpacity>
+                        </View>
+                        {touched.password && errors.password && (
+                            <Text style={styles.errorText}>{errors.password}</Text>
+                        )}
                       </View>
 
                       <View style={styles.inputWrapper}>
-                        <FormControl isInvalid={touched.confirmPassword && errors.confirmPassword}>
-                          <View style={[
-                            styles.inputContainer,
-                            touched.confirmPassword && errors.confirmPassword && styles.inputContainerError
-                          ]}>
+                        <View style={[
+                          styles.inputContainer,
+                          touched.confirmPassword && errors.confirmPassword && styles.inputContainerError
+                        ]}>
+                          <MaterialIcons
+                              name="lock"
+                              size={20}
+                              color={COLORS.textTertiary}
+                              style={styles.inputIcon}
+                          />
+                          <TextInput
+                              ref={confirmPasswordRef}
+                              style={styles.textInput}
+                              placeholder="Confirm password"
+                              placeholderTextColor={COLORS.textTertiary}
+                              value={values.confirmPassword}
+                              onChangeText={handleChange('confirmPassword')}
+                              onBlur={handleBlur('confirmPassword')}
+                              secureTextEntry={!showConfirmPassword}
+                              returnKeyType="done"
+                              onSubmitEditing={() => handleSubmit()}
+                              autoCorrect={false}
+                          />
+                          <TouchableOpacity
+                              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                              style={styles.eyeIcon}
+                          >
                             <MaterialIcons
-                                name="lock"
+                                name={showConfirmPassword ? "visibility" : "visibility-off"}
                                 size={20}
                                 color={COLORS.textTertiary}
-                                style={styles.inputIcon}
                             />
-                            <Input
-                                flex={1}
-                                variant="unstyled"
-                                placeholder="Confirm password"
-                                placeholderTextColor={COLORS.textTertiary}
-                                value={values.confirmPassword}
-                                onChangeText={handleChange('confirmPassword')}
-                                onBlur={handleBlur('confirmPassword')}
-                                type={showConfirmPassword ? "text" : "password"}
-                                ref={confirmPasswordRef}
-                                returnKeyType="done"
-                                onSubmitEditing={() => handleSubmit()}
-                                autoCorrect={false}
-                                disableFullscreenUI={true}
-                                fontSize={TYPOGRAPHY.fontSizes.base}
-                                color={COLORS.textPrimary}
-                                _focus={{ borderWidth: 0 }}
-                            />
-                            <Pressable
-                                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                                style={styles.eyeIcon}
-                            >
-                              <MaterialIcons
-                                  name={showConfirmPassword ? "visibility" : "visibility-off"}
-                                  size={20}
-                                  color={COLORS.textTertiary}
-                              />
-                            </Pressable>
-                          </View>
-                          {touched.confirmPassword && errors.confirmPassword && (
-                              <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-                          )}
-                        </FormControl>
+                          </TouchableOpacity>
+                        </View>
+                        {touched.confirmPassword && errors.confirmPassword && (
+                            <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                        )}
                       </View>
 
                       <TouchableOpacity
@@ -433,14 +399,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSizes['4xl'] * 1.2,
-    includeFontPadding: false,
   },
   subtitleText: {
     fontSize: TYPOGRAPHY.fontSizes.base,
     color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSizes.base * 1.3,
-    includeFontPadding: false,
   },
   formContainer: {
     backgroundColor: COLORS.background,
@@ -472,6 +436,12 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     marginRight: SPACING.md,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.textPrimary,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
   },
   eyeIcon: {
     padding: SPACING.xs,

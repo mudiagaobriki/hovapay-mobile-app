@@ -43,8 +43,8 @@ This app includes a complete authentication system built with Redux Toolkit, Red
 
 ### API Endpoints
 
-- Login: `http://localhost:3040/api/login`
-- Register: `http://localhost:3040/api/register`
+- Login: `http://192.168.148.122:3040/api/login`
+- Register: `http://192.168.148.122:3040/api/register`
 
 ### Redux Store Structure
 

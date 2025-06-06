@@ -208,7 +208,7 @@ export default function WalletScreen() {
                     </View>
                     <Text style={styles.balanceAmount}>
                         {balanceVisible
-                            ? (walletData ? formatCurrency(walletData.balance) : '₦0.00')
+                            ? (walletData ? formatCurrency(walletData?.data?.balance) : '₦0.00')
                             : '****'
                         }
                     </Text>
