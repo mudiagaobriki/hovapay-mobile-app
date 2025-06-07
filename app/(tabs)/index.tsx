@@ -1,4 +1,4 @@
-// app/(tabs)/index.tsx - Updated with transaction navigation
+// app/(tabs)/index.tsx - Fixed Redux selector usage
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -14,8 +14,10 @@ import {
 import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSelector } from 'react-redux';
 import { useRouter } from 'expo-router';
+// Import useSelector and RootState for proper typing
+import { useSelector } from 'react-redux';
+import { RootState } from '@/store';
 import { selectCurrentUser } from '@/store/slices/authSlice';
 import { handleLogout } from '@/utils/auth';
 import {
@@ -45,12 +47,12 @@ const getCategoryRoute = (identifier: string): string => {
     'education': '/bills/education',
     'insurance': '/bills/insurance',
     'other-services': '/bills/other-services',
-    'bulk-sms': '/bills/bulk-sms', // Add bulk SMS route
+    'bulk-sms': '/bills/bulk-sms',
   };
   return routeMap[identifier] || '/bills/other-services';
 };
 
-// Service category to icon mapping (add bulk SMS)
+// Service category to icon mapping
 const getCategoryIcon = (identifier: string): string => {
   const iconMap: { [key: string]: string } = {
     'airtime': 'phone',
@@ -60,12 +62,12 @@ const getCategoryIcon = (identifier: string): string => {
     'education': 'school',
     'insurance': 'security',
     'other-services': 'more-horiz',
-    'bulk-sms': 'sms', // Add bulk SMS
+    'bulk-sms': 'sms',
   };
   return iconMap[identifier] || 'receipt';
 };
 
-// Service category to color mapping (add bulk SMS)
+// Service category to color mapping
 const getCategoryColor = (identifier: string): string => {
   const colorMap: { [key: string]: string } = {
     'airtime': '#10B981',
@@ -75,14 +77,15 @@ const getCategoryColor = (identifier: string): string => {
     'education': '#8B5CF6',
     'insurance': '#6366F1',
     'other-services': '#9CA3AF',
-    'bulk-sms': '#F97316', // Add bulk SMS color
+    'bulk-sms': '#F97316',
   };
   return colorMap[identifier] || '#6B7280';
 };
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const user = useSelector(selectCurrentUser);
+  // Use useSelector with proper typing
+  const user = useSelector((state: RootState) => selectCurrentUser(state));
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
 

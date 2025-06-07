@@ -1,4 +1,4 @@
-// app/bills/airtime.tsx
+// app/bills/airtime.tsx - Enhanced Implementation
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -50,13 +50,15 @@ export default function AirtimeScreen() {
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkService | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
 
-  const { data: airtimeServices } = useGetServicesByCategoryQuery('airtime');
-  const { data: walletData } = useGetWalletBalanceQuery();
+  const { data: airtimeServices, isLoading: servicesLoading } = useGetServicesByCategoryQuery('airtime');
+  const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
   const [payBill, { isLoading }] = usePayBillMutation();
 
-  const networks = airtimeServices?.content?.filter(service =>
-      ['mtn', 'airtel', 'glo', 'etisalat'].includes(service.serviceID)
-  ) || [];
+  // Filter and map networks properly
+  const networks = airtimeServices?.content?.filter(service => {
+    const serviceId = service.serviceID.toLowerCase();
+    return ['mtn', 'airtel', 'glo', 'etisalat', '9mobile'].includes(serviceId);
+  }) || [];
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -66,14 +68,37 @@ export default function AirtimeScreen() {
     }).format(amount);
   };
 
+  const validatePhoneNumber = (phone: string, network: string) => {
+    const networkPrefixes = {
+      'mtn': ['0803', '0806', '0813', '0816', '0903', '0906', '0913', '0916'],
+      'airtel': ['0802', '0808', '0812', '0901', '0907', '0911'],
+      'glo': ['0805', '0807', '0811', '0815', '0905', '0915'],
+      'etisalat': ['0809', '0817', '0818', '0908', '0909'],
+      '9mobile': ['0809', '0817', '0818', '0908', '0909']
+    };
+
+    const prefix = phone.substring(0, 4);
+    const validPrefixes = networkPrefixes[network.toLowerCase()] || [];
+
+    return validPrefixes.includes(prefix);
+  };
+
   const handlePurchase = async (values: any) => {
     if (!selectedNetwork) {
       Alert.alert('Error', 'Please select a network');
       return;
     }
 
-    // console.log({walletData})
+    // Validate phone number against selected network
+    if (!validatePhoneNumber(values.phone, selectedNetwork.serviceID)) {
+      Alert.alert(
+          'Invalid Phone Number',
+          `The phone number ${values.phone} does not match the selected ${selectedNetwork.name} network. Please check and try again.`
+      );
+      return;
+    }
 
+    // Check wallet balance
     if (walletData && values.amount > walletData.data.balance) {
       const shortfall = values.amount - walletData.data.balance;
       Alert.alert(
@@ -82,8 +107,8 @@ export default function AirtimeScreen() {
           [
             { text: 'Cancel', style: 'cancel' },
             {
-              text: 'Go to Wallet',
-              onPress: () => router.push('/(tabs)/wallet'), // Navigate to wallet tab
+              text: 'Fund Wallet',
+              onPress: () => router.push('/(tabs)/wallet'),
               style: 'default'
             }
           ]
@@ -92,22 +117,54 @@ export default function AirtimeScreen() {
     }
 
     try {
-      const result = await payBill({
+      // Prepare the payload according to VTPass airtime API specification
+      // For airtime, only request_id, serviceID, amount, and phone are required
+      const payload = {
+        request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Generate unique request ID
         serviceID: selectedNetwork.serviceID,
-        amount: values.amount,
-        phone: `+234${values.phone.substring(1)}`, // Convert to international format
-      }).unwrap();
+        amount: Number(values.amount),
+        phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone, // Remove leading 0 for VTPass
+      };
+
+      console.log('Sending airtime purchase request:', payload);
+
+      const result = await payBill(payload).unwrap();
+
+      console.log('Airtime purchase result:', result);
+
+      // Refetch wallet balance to update UI
+      refetchWallet();
 
       Alert.alert(
           'Purchase Successful!',
-          `₦${values.amount} airtime has been sent to ${values.phone}`,
-          [{ text: 'OK', onPress: () => router.back() }]
+          `₦${values.amount} ${selectedNetwork.name} airtime has been sent to ${values.phone}`,
+          [
+            {
+              text: 'View Receipt',
+              onPress: () => {
+                // Navigate to transaction details or receipt screen
+                // router.push(`/bills/receipt?ref=${result.reference}`);
+              }
+            },
+            {
+              text: 'Done',
+              onPress: () => router.back(),
+              style: 'default'
+            }
+          ]
       );
     } catch (error: any) {
-      Alert.alert(
-          'Purchase Failed',
-          error.message || 'Something went wrong. Please try again.'
-      );
+      console.error('Airtime purchase error:', error);
+
+      let errorMessage = 'Something went wrong. Please try again.';
+
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert('Purchase Failed', errorMessage);
     }
   };
 
@@ -191,9 +248,15 @@ export default function AirtimeScreen() {
                   {/* Network Selection */}
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Select Network</Text>
-                    <View style={styles.networksGrid}>
-                      {networks.map(renderNetwork)}
-                    </View>
+                    {servicesLoading ? (
+                        <View style={styles.loadingContainer}>
+                          <Text style={styles.loadingText}>Loading networks...</Text>
+                        </View>
+                    ) : (
+                        <View style={styles.networksGrid}>
+                          {networks.map(renderNetwork)}
+                        </View>
+                    )}
                   </View>
 
                   {/* Phone Number */}
@@ -301,7 +364,7 @@ export default function AirtimeScreen() {
                         (!selectedNetwork || !values.amount || !values.phone || isLoading) && styles.purchaseButtonDisabled
                       ]}
                       onPress={() => {
-                        if (selectedAmount && selectedAmount !== values.amount) {
+                        if (selectedAmount && selectedAmount !== Number(values.amount)) {
                           setFieldValue('amount', selectedAmount);
                         }
                         handleSubmit();
@@ -387,6 +450,16 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
     color: COLORS.textPrimary,
     marginBottom: SPACING.base,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.base,
+  },
+  loadingText: {
+    marginLeft: SPACING.sm,
+    color: COLORS.textSecondary,
   },
   networksGrid: {
     flexDirection: 'row',
@@ -553,9 +626,5 @@ const styles = StyleSheet.create({
     color: COLORS.textInverse,
     fontSize: TYPOGRAPHY.fontSizes.base,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
 });
