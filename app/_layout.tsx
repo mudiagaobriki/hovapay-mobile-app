@@ -4,21 +4,48 @@ import { useFonts } from 'expo-font';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NativeBaseProvider } from 'native-base';
+import { View, Text } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { ReduxProvider } from '@/store/provider';
-// Import the typed hook instead of plain useSelector
 import { useAppSelector } from '@/store/hooks';
 import { selectIsAuthenticated } from '@/store/slices/authSlice';
 
 // Auth guard component to protect routes
 function AuthGuard({ children }: { children: React.ReactNode }) {
-    // Use the typed selector hook
-    const isAuthenticated = useAppSelector(selectIsAuthenticated);
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Use try-catch to handle any selector errors
+    let isAuthenticated = false;
+    try {
+        isAuthenticated = useAppSelector(selectIsAuthenticated) || false;
+    } catch (error) {
+        console.warn('Error reading auth state:', error);
+        isAuthenticated = false;
+    }
+
     const segments = useSegments();
     const pathname = usePathname();
+
+    useEffect(() => {
+        // Give the store a moment to initialize
+        const timer = setTimeout(() => {
+            setIsInitialized(true);
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, []);
+
+    // Show loading while initializing
+    if (!isInitialized) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text>Loading...</Text>
+            </View>
+        );
+    }
 
     // Protected routes - require authentication
     const protectedRoutes = ['(tabs)', 'bills'];
@@ -44,7 +71,6 @@ export default function RootLayout() {
     });
 
     if (!loaded) {
-        // Async font loading only occurs in development.
         return null;
     }
 

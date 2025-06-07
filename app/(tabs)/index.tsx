@@ -84,8 +84,15 @@ const getCategoryColor = (identifier: string): string => {
 
 export default function DashboardScreen() {
   const router = useRouter();
-  // Use useSelector with proper typing
-  const user = useSelector((state: RootState) => selectCurrentUser(state));
+  // Use useSelector with proper typing and safety check
+  let user = null;
+  try {
+    user = useSelector((state: RootState) => selectCurrentUser(state));
+  } catch (error) {
+    console.warn('Error reading user state:', error);
+    user = null;
+  }
+
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
 
