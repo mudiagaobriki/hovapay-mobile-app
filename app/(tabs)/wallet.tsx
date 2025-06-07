@@ -1,4 +1,4 @@
-// app/(tabs)/wallet.tsx
+// app/(tabs)/wallet.tsx - Enhanced with Virtual Account
 import React, { useState } from 'react';
 import {
     StyleSheet,
@@ -9,6 +9,8 @@ import {
     StatusBar,
     RefreshControl,
     Dimensions,
+    Clipboard,
+    Alert, Platform,
 } from 'react-native';
 import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,7 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
     useGetWalletBalanceQuery,
-    useGetTransactionHistoryQuery
+    useGetTransactionHistoryQuery,
+    useGetVirtualAccountQuery,
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
@@ -26,12 +29,14 @@ export default function WalletScreen() {
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
     const [balanceVisible, setBalanceVisible] = useState(true);
+    const [showVirtualAccount, setShowVirtualAccount] = useState(false);
 
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const { data: transactionData } = useGetTransactionHistoryQuery({
         page: 1,
         limit: 5
     });
+    const { data: virtualAccountData } = useGetVirtualAccountQuery();
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-NG', {
@@ -66,11 +71,16 @@ export default function WalletScreen() {
         }
     };
 
+    const copyToClipboard = async (text: string, label: string) => {
+        await Clipboard.setString(text);
+        Alert.alert('Copied!', `${label} copied to clipboard`);
+    };
+
     const walletActions = [
         {
             id: 'fund',
-            title: 'Fund Wallet',
-            subtitle: 'Add money',
+            title: 'Add Money',
+            subtitle: 'Fund wallet',
             icon: 'add',
             color: COLORS.success,
             onPress: () => router.push('/wallet/fund'),
@@ -120,18 +130,35 @@ export default function WalletScreen() {
                     {
                         backgroundColor: transaction.type === 'deposit'
                             ? COLORS.success + '20'
-                            : COLORS.primary + '20'
+                            : transaction.type === 'virtual_account_credit'
+                                ? COLORS.info + '20'
+                                : COLORS.primary + '20'
                     }
                 ]}>
                     <MaterialIcons
-                        name={transaction.type === 'deposit' ? 'add' : 'receipt'}
+                        name={
+                            transaction.type === 'deposit'
+                                ? 'add'
+                                : transaction.type === 'virtual_account_credit'
+                                    ? 'account-balance'
+                                    : 'receipt'
+                        }
                         size={16}
-                        color={transaction.type === 'deposit' ? COLORS.success : COLORS.primary}
+                        color={
+                            transaction.type === 'deposit'
+                                ? COLORS.success
+                                : transaction.type === 'virtual_account_credit'
+                                    ? COLORS.info
+                                    : COLORS.primary
+                        }
                     />
                 </View>
                 <View style={styles.transactionDetails}>
                     <Text style={styles.transactionDescription}>
-                        {transaction.description || transaction.serviceType || 'Transaction'}
+                        {transaction.type === 'virtual_account_credit'
+                            ? 'Bank Transfer'
+                            : transaction.description || transaction.serviceType || 'Transaction'
+                        }
                     </Text>
                     <Text style={styles.transactionDate}>
                         {formatDate(transaction.createdAt || transaction.date)}
@@ -141,9 +168,13 @@ export default function WalletScreen() {
             <View style={styles.transactionRight}>
                 <Text style={[
                     styles.transactionAmount,
-                    { color: transaction.type === 'deposit' ? COLORS.success : COLORS.textPrimary }
+                    { color: transaction.type === 'deposit' || transaction.type === 'virtual_account_credit'
+                            ? COLORS.success
+                            : COLORS.textPrimary
+                    }
                 ]}>
-                    {transaction.type === 'deposit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                    {transaction.type === 'deposit' || transaction.type === 'virtual_account_credit' ? '+' : '-'}
+                    {formatCurrency(transaction.amount)}
                 </Text>
                 <View style={[
                     styles.statusBadge,
@@ -171,6 +202,74 @@ export default function WalletScreen() {
             </View>
         </TouchableOpacity>
     );
+
+    const renderVirtualAccountCard = () => {
+        if (!virtualAccountData?.data) return null;
+
+        const { accountNumber, bankName, accountName } = virtualAccountData.data;
+
+        return (
+            <View style={styles.virtualAccountCard}>
+                <View style={styles.virtualAccountHeader}>
+                    <View style={styles.virtualAccountHeaderLeft}>
+                        <MaterialIcons name="account-balance" size={20} color={COLORS.info} />
+                        <Text style={styles.virtualAccountTitle}>Dedicated Account</Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => setShowVirtualAccount(!showVirtualAccount)}
+                        style={styles.toggleButton}
+                    >
+                        <MaterialIcons
+                            name={showVirtualAccount ? 'expand-less' : 'expand-more'}
+                            size={20}
+                            color={COLORS.textSecondary}
+                        />
+                    </TouchableOpacity>
+                </View>
+
+                {showVirtualAccount && (
+                    <View style={styles.virtualAccountDetails}>
+                        <View style={styles.accountRow}>
+                            <Text style={styles.accountLabel}>Bank</Text>
+                            <View style={styles.accountValueContainer}>
+                                <Text style={styles.accountValue}>{bankName}</Text>
+                                <TouchableOpacity onPress={() => copyToClipboard(bankName, 'Bank name')}>
+                                    <MaterialIcons name="content-copy" size={14} color={COLORS.textTertiary} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.accountRow}>
+                            <Text style={styles.accountLabel}>Account Number</Text>
+                            <View style={styles.accountValueContainer}>
+                                <Text style={[styles.accountValue, styles.accountNumber]}>{accountNumber}</Text>
+                                <TouchableOpacity onPress={() => copyToClipboard(accountNumber, 'Account number')}>
+                                    <MaterialIcons name="content-copy" size={14} color={COLORS.info} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.accountRow}>
+                            <Text style={styles.accountLabel}>Account Name</Text>
+                            <View style={styles.accountValueContainer}>
+                                <Text style={styles.accountValue}>{accountName}</Text>
+                                <TouchableOpacity onPress={() => copyToClipboard(accountName, 'Account name')}>
+                                    <MaterialIcons name="content-copy" size={14} color={COLORS.textTertiary} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.virtualAccountNote}>
+                            <MaterialIcons name="info" size={14} color={COLORS.info} />
+                            <Text style={styles.noteText}>
+                                Transfer to this account and your wallet gets credited instantly
+                            </Text>
+                        </View>
+                    </View>
+                )}
+            </View>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -208,7 +307,7 @@ export default function WalletScreen() {
                     </View>
                     <Text style={styles.balanceAmount}>
                         {balanceVisible
-                            ? (walletData ? formatCurrency(walletData?.data?.balance) : '₦0.00')
+                            ? (walletData?.data ? formatCurrency(walletData.data.balance) : '₦0.00')
                             : '****'
                         }
                     </Text>
@@ -230,6 +329,13 @@ export default function WalletScreen() {
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
+                {/* Virtual Account Card */}
+                {virtualAccountData?.data && (
+                    <View style={styles.section}>
+                        {renderVirtualAccountCard()}
+                    </View>
+                )}
+
                 {/* Quick Stats */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Overview</Text>
@@ -406,6 +512,88 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontWeight: TYPOGRAPHY.fontWeights.medium,
     },
+
+    // Virtual Account Styles
+    virtualAccountCard: {
+        backgroundColor: COLORS.background,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        borderWidth: 1,
+        borderColor: COLORS.info + '30',
+        ...SHADOWS.sm,
+    },
+    virtualAccountHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: SPACING.xs,
+    },
+    virtualAccountHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    virtualAccountTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.info,
+        marginLeft: SPACING.sm,
+    },
+    toggleButton: {
+        padding: SPACING.xs,
+    },
+    virtualAccountDetails: {
+        marginTop: SPACING.sm,
+        paddingTop: SPACING.sm,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    accountRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.sm,
+    },
+    accountLabel: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textTertiary,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        flex: 1,
+    },
+    accountValueContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 2,
+        justifyContent: 'flex-end',
+    },
+    accountValue: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textPrimary,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        marginRight: SPACING.sm,
+        textAlign: 'right',
+    },
+    accountNumber: {
+        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+        color: COLORS.info,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+    },
+    virtualAccountNote: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.info + '08',
+        borderRadius: RADIUS.base,
+        padding: SPACING.sm,
+        marginTop: SPACING.sm,
+    },
+    noteText: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+        marginLeft: SPACING.xs,
+        flex: 1,
+        fontStyle: 'italic',
+    },
+
+    // Other styles
     statsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',

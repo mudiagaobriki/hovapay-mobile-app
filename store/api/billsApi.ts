@@ -1,90 +1,27 @@
-// store/api/billsApi.ts
+// store/api/billsApi.ts - FIXED
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '../index';
 
-interface ServiceCategory {
-  identifier: string;
-  name: string;
-}
-
-interface BillService {
-  serviceID: string;
-  name: string;
-  minimium_amount: string;
-  maximum_amount: number;
-  convinience_fee: string;
-  product_type: string;
-  image: string;
-}
-
-interface ServiceVariation {
-  variation_code: string;
-  name: string;
-  variation_amount: number;
-  fixedPrice: string;
-}
-
-interface ServiceVariationsResponse {
-  content: {
-    ServiceName: string;
-    convinience_fee: string;
-    serviceID: string;
-    varations: ServiceVariation[]; // Note: API has typo "varations"
-    variations: ServiceVariation[]; // Correct spelling also exists
-  };
-  response_description: string;
-}
-
-interface VerifyCustomerRequest {
-  serviceID: string;
-  billersCode: string;
-  type?: string;
-}
-
-interface VerifyCustomerResponse {
-  response_description: string;
-  content: {
-    Customer_Name: string;
-    Status: string;
-    Customer_Type: string;
-    DueDate: string;
-    CustomerNumber: string;
-    CustomerAddress: string;
-  };
-}
-
-interface PayBillRequest {
-  serviceID: string;
-  billersCode?: string;
-  variation_code?: string;
-  amount: number;
-  phone: string;
-}
-
-interface PayBillResponse {
-  response_description: string;
-  requestId: string;
-  transactionId: string;
-  amount: number;
-  purchased_code: string;
-}
-
+// ... (interfaces remain the same)
 interface WalletBalance {
   balance: number;
   currency: string;
+  status: string;
 }
 
-interface Transaction {
-  _id: string;
-  type: string;
-  amount: number;
-  description: string;
-  status: string;
-  reference: string;
-  serviceType?: string;
-  createdAt: string;
-  updatedAt: string;
+interface PaymentVerificationResponse {
+  success: boolean;
+  message: string;
+  data: {
+    status: string;
+    amount: number;
+    reference: string;
+    gateway: string;
+    channel?: string;
+    paidAt?: string;
+  };
 }
+
 
 export const billsApi = createApi({
   reducerPath: 'billsApi',
@@ -99,21 +36,28 @@ export const billsApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Wallet', 'Transactions', 'Services'],
+  tagTypes: ['Wallet', 'Transactions', 'Services', 'VirtualAccount'],
   endpoints: (builder) => ({
     // Wallet endpoints
-    getWalletBalance: builder.query<WalletBalance, void>({
+    getWalletBalance: builder.query<{data: WalletBalance}, void>({
       query: () => '/wallet/balance',
       providesTags: ['Wallet'],
     }),
 
-    fundWallet: builder.mutation<any, { amount: number; gateway: 'paystack' | 'monnify' }>({
+    fundWallet: builder.mutation<FundWalletResponse, FundWalletRequest>({
       query: (data) => ({
         url: '/wallet/fund',
         method: 'POST',
         body: data,
       }),
-      invalidatesTags: ['Wallet'],
+      // This mutation only starts the process, so it doesn't invalidate the wallet yet.
+    }),
+
+    // [MODIFIED] Changed from query to mutation to invalidate cache on success
+    verifyPayment: builder.mutation<PaymentVerificationResponse, string>({
+      query: (reference) => `/wallet/verify/${reference}`,
+      // Invalidating 'Wallet' will force getWalletBalance to refetch.
+      invalidatesTags: ['Wallet', 'Transactions'],
     }),
 
     getTransactionHistory: builder.query<{
@@ -131,7 +75,42 @@ export const billsApi = createApi({
       providesTags: ['Transactions'],
     }),
 
-    // Bills service endpoints
+    // ... (rest of the endpoints remain the same)
+    createVirtualAccount: builder.mutation<VirtualAccountResponse, {}>({
+      query: () => ({
+        url: '/wallet/virtual-account',
+        method: 'POST',
+        body: {},
+      }),
+      invalidatesTags: ['VirtualAccount'],
+    }),
+
+    getVirtualAccount: builder.query<VirtualAccountResponse, void>({
+      query: () => '/wallet/virtual-account',
+      providesTags: ['VirtualAccount'],
+    }),
+
+    transferFunds: builder.mutation<any, {
+      recipientIdentifier: string;
+      amount: number;
+      description: string;
+    }>({
+      query: (data) => ({
+        url: '/wallet/transfer',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Wallet', 'Transactions'],
+    }),
+
+    getPaystackBanks: builder.query<{success: boolean; banks: any[]}, void>({
+      query: () => '/wallet/banks/paystack',
+    }),
+
+    getMonnifyBanks: builder.query<{success: boolean; banks: any[]}, void>({
+      query: () => '/wallet/banks/monnify',
+    }),
+
     getServiceCategories: builder.query<{
       content: ServiceCategory[];
       response_description: string;
@@ -195,7 +174,13 @@ export const billsApi = createApi({
 export const {
   useGetWalletBalanceQuery,
   useFundWalletMutation,
+  useVerifyPaymentMutation, // [MODIFIED] Export the new mutation hook
   useGetTransactionHistoryQuery,
+  useCreateVirtualAccountMutation,
+  useGetVirtualAccountQuery,
+  useTransferFundsMutation,
+  useGetPaystackBanksQuery,
+  useGetMonnifyBanksQuery,
   useGetServiceCategoriesQuery,
   useGetServicesByCategoryQuery,
   useGetServiceVariationsQuery,
