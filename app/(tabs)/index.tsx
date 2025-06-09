@@ -15,9 +15,8 @@ import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-// Import useSelector and RootState for proper typing
-import { useSelector } from 'react-redux';
-import { RootState } from '@/store';
+// Use the typed hooks
+import { useAppSelector } from '@/store/hooks';
 import { selectCurrentUser } from '@/store/slices/authSlice';
 import { handleLogout } from '@/utils/auth';
 import {
@@ -84,15 +83,8 @@ const getCategoryColor = (identifier: string): string => {
 
 export default function DashboardScreen() {
   const router = useRouter();
-  // Use useSelector with proper typing and safety check
-  let user = null;
-  try {
-    user = useSelector((state: RootState) => selectCurrentUser(state));
-  } catch (error) {
-    console.warn('Error reading user state:', error);
-    user = null;
-  }
-
+  // Use the typed selector
+  const user = useAppSelector(selectCurrentUser);
   const [refreshing, setRefreshing] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
 

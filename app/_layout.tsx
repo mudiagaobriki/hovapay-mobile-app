@@ -1,62 +1,29 @@
-// app/_layout.tsx
+// app/_layout.tsx - Simple version
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect, useState } from 'react';
 import { NativeBaseProvider } from 'native-base';
-import { View, Text } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { ReduxProvider } from '@/store/provider';
 import { useAppSelector } from '@/store/hooks';
 import { selectIsAuthenticated } from '@/store/slices/authSlice';
 
-// Auth guard component to protect routes
+// Simple auth guard
 function AuthGuard({ children }: { children: React.ReactNode }) {
-    const [isInitialized, setIsInitialized] = useState(false);
-
-    // Use try-catch to handle any selector errors
-    let isAuthenticated = false;
-    try {
-        isAuthenticated = useAppSelector(selectIsAuthenticated) || false;
-    } catch (error) {
-        console.warn('Error reading auth state:', error);
-        isAuthenticated = false;
-    }
-
+    const isAuthenticated = useAppSelector(selectIsAuthenticated);
     const segments = useSegments();
     const pathname = usePathname();
 
-    useEffect(() => {
-        // Give the store a moment to initialize
-        const timer = setTimeout(() => {
-            setIsInitialized(true);
-        }, 100);
-
-        return () => clearTimeout(timer);
-    }, []);
-
-    // Show loading while initializing
-    if (!isInitialized) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text>Loading...</Text>
-            </View>
-        );
-    }
-
-    // Protected routes - require authentication
     const protectedRoutes = ['(tabs)', 'bills'];
     const isInProtectedRoute = protectedRoutes.includes(segments[0]);
 
-    // If we're in a protected route and not authenticated, redirect to login
     if (!isAuthenticated && isInProtectedRoute) {
         return <Redirect href="/login" />;
     }
 
-    // If we're in an auth page and authenticated, redirect to tabs
     if (isAuthenticated && (pathname === '/login' || pathname === '/register')) {
         return <Redirect href="/(tabs)" />;
     }
@@ -87,48 +54,12 @@ export default function RootLayout() {
                                 gestureEnabled: true,
                             }}
                         >
-                            <Stack.Screen
-                                name="splash"
-                                options={{
-                                    headerShown: false,
-                                    animation: 'fade',
-                                }}
-                            />
-                            <Stack.Screen
-                                name="login"
-                                options={{
-                                    headerShown: false,
-                                    animation: 'slide_from_bottom',
-                                }}
-                            />
-                            <Stack.Screen
-                                name="register"
-                                options={{
-                                    headerShown: false,
-                                    animation: 'slide_from_bottom',
-                                }}
-                            />
-                            <Stack.Screen
-                                name="(tabs)"
-                                options={{
-                                    headerShown: false,
-                                    animation: 'fade',
-                                }}
-                            />
-                            <Stack.Screen
-                                name="bills"
-                                options={{
-                                    headerShown: false,
-                                    presentation: 'card',
-                                    animation: 'slide_from_right',
-                                }}
-                            />
-                            <Stack.Screen
-                                name="+not-found"
-                                options={{
-                                    title: 'Not Found',
-                                }}
-                            />
+                            <Stack.Screen name="splash" options={{ headerShown: false, animation: 'fade' }} />
+                            <Stack.Screen name="login" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                            <Stack.Screen name="register" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
+                            <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
+                            <Stack.Screen name="bills" options={{ headerShown: false, presentation: 'card', animation: 'slide_from_right' }} />
+                            <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
                         </Stack>
                     </AuthGuard>
                     <StatusBar style="auto" />

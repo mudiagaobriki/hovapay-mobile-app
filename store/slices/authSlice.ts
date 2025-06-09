@@ -1,6 +1,6 @@
-// store/slices/authSlice.ts - With manual persistence
+// store/slices/authSlice.ts - Clean version without manual persistence
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { RootState } from '../index';
 
 export interface User {
   _id: string;
@@ -35,25 +35,6 @@ const initialState: AuthState = {
   error: null,
 };
 
-// Async storage helpers
-const STORAGE_KEY = '@app_auth_state';
-
-const saveAuthState = async (authData: { user: User; token: string; isAuthenticated: boolean }) => {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(authData));
-  } catch (error) {
-    console.warn('Failed to save auth state:', error);
-  }
-};
-
-const clearAuthState = async () => {
-  try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.warn('Failed to clear auth state:', error);
-  }
-};
-
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -66,13 +47,6 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.isAuthenticated = true;
       state.error = null;
-
-      // Save to AsyncStorage whenever credentials are set
-      saveAuthState({
-        user: action.payload.user,
-        token: action.payload.token,
-        isAuthenticated: true
-      });
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
@@ -89,20 +63,10 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.error = null;
-
-      // Clear from AsyncStorage when logging out
-      clearAuthState();
     },
     updateUser: (state, action: PayloadAction<Partial<User>>) => {
       if (state.user) {
         state.user = { ...state.user, ...action.payload };
-
-        // Update AsyncStorage with new user data
-        saveAuthState({
-          user: state.user,
-          token: state.token!,
-          isAuthenticated: state.isAuthenticated
-        });
       }
     },
   },
@@ -117,22 +81,11 @@ export const {
   updateUser,
 } = authSlice.actions;
 
-// Load auth state from AsyncStorage
-export const loadAuthState = async () => {
-  try {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : null;
-  } catch (error) {
-    console.warn('Failed to load auth state:', error);
-    return null;
-  }
-};
-
 // Selectors
-export const selectCurrentUser = (state: { auth: AuthState }) => state.auth.user;
-export const selectCurrentToken = (state: { auth: AuthState }) => state.auth.token;
-export const selectIsAuthenticated = (state: { auth: AuthState }) => state.auth.isAuthenticated;
-export const selectAuthLoading = (state: { auth: AuthState }) => state.auth.isLoading;
-export const selectAuthError = (state: { auth: AuthState }) => state.auth.error;
+export const selectCurrentUser = (state: RootState) => state.auth.user;
+export const selectCurrentToken = (state: RootState) => state.auth.token;
+export const selectIsAuthenticated = (state: RootState) => state.auth.isAuthenticated;
+export const selectAuthLoading = (state: RootState) => state.auth.isLoading;
+export const selectAuthError = (state: RootState) => state.auth.error;
 
 export default authSlice.reducer;
