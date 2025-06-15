@@ -1,4 +1,4 @@
-// app/bills/receipt.tsx - Enhanced Transaction Receipt Screen with Live Status
+// app/bills/receipt.tsx - Enhanced Transaction Receipt Screen with PDF Download
 import React, { useState, useEffect } from 'react';
 import {
     StyleSheet,
@@ -10,6 +10,8 @@ import {
     Share,
     Alert,
     ActivityIndicator,
+    Platform,
+    Linking,
 } from 'react-native';
 import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,6 +19,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useGetTransactionStatusQuery } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+import { printToFileAsync } from 'expo-print';
 
 interface ReceiptParams {
     transactionRef: string;
@@ -34,6 +40,7 @@ export default function TransactionReceiptScreen() {
     const router = useRouter();
     const params = useLocalSearchParams() as unknown as ReceiptParams;
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     // Helper function to get service name
     const getServiceName = (serviceID: string, serviceType: string) => {
@@ -49,14 +56,22 @@ export default function TransactionReceiptScreen() {
             'etisalat-data': '9Mobile Data',
             'dstv': 'DSTV Subscription',
             'gotv': 'GOtv Subscription',
-            'startimes': 'Startimes Subscription',
+            'startimes': 'StarTimes Subscription',
+            'showmax': 'Showmax Subscription',
         };
 
         if (serviceNames[serviceID]) {
             return serviceNames[serviceID];
         }
 
-        // Fallback to params or formatted service type
+        // Enhanced fallback for TV subscriptions
+        if (serviceType === 'cable' || serviceType === 'tv-subscription') {
+            if (params.serviceName) return params.serviceName;
+            if (params.network) return `${params.network} Subscription`;
+            return 'TV Subscription';
+        }
+
+        // Other fallbacks
         if (params.serviceName) return params.serviceName;
         if (params.network) return `${params.network} ${serviceType || 'Service'}`;
 
@@ -198,36 +213,583 @@ Powered by Hovapay
         }
     };
 
-    const handleDownload = () => {
-        Alert.alert(
-            'Download Receipt',
-            'PDF download feature will be available soon.',
-            [{ text: 'OK' }]
-        );
+    const generatePDFHTML = () => {
+        const statusColor = actualStatus === 'completed' || actualStatus === 'successful' ? '#28a745' :
+            actualStatus === 'failed' ? '#dc3545' : '#ffc107';
+
+        const statusText = getStatusText(actualStatus);
+        const statusIcon = actualStatus === 'completed' || actualStatus === 'successful' ? '✓' :
+            actualStatus === 'failed' ? '✗' : '⏳';
+
+        return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Hovapay Transaction Receipt</title>
+        <style>
+            body {
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+                color: #333;
+                line-height: 1.6;
+            }
+            .receipt-container {
+                max-width: 600px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #0b3d6f 0%, #1a5490 100%);
+                color: white;
+                text-align: center;
+                padding: 30px 20px;
+            }
+            .logo {
+                font-size: 28px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+            .header-subtitle {
+                font-size: 14px;
+                opacity: 0.9;
+            }
+            .status-section {
+                text-align: center;
+                padding: 30px 20px;
+                background: #f8f9fa;
+            }
+            .status-icon {
+                display: inline-block;
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                background-color: ${statusColor};
+                color: white;
+                font-size: 40px;
+                line-height: 80px;
+                margin-bottom: 15px;
+            }
+            .status-text {
+                font-size: 24px;
+                font-weight: bold;
+                color: ${statusColor};
+                margin-bottom: 10px;
+            }
+            .status-message {
+                color: #666;
+                font-size: 14px;
+            }
+            .receipt-details {
+                padding: 30px;
+            }
+            .receipt-title {
+                font-size: 20px;
+                font-weight: bold;
+                text-align: center;
+                margin-bottom: 30px;
+                color: #333;
+            }
+            .detail-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 12px 0;
+                border-bottom: 1px solid #eee;
+            }
+            .detail-row:last-child {
+                border-bottom: none;
+            }
+            .detail-label {
+                color: #666;
+                font-weight: 500;
+            }
+            .detail-value {
+                font-weight: 600;
+                color: #333;
+            }
+            .detail-value.highlight {
+                color: #0b3d6f;
+                font-size: 18px;
+            }
+            .divider {
+                height: 2px;
+                background: linear-gradient(to right, #0b3d6f, #1a5490);
+                margin: 20px 0;
+                border-radius: 1px;
+            }
+            .error-section {
+                background: #fff5f5;
+                border: 1px solid #fed7d7;
+                border-radius: 8px;
+                padding: 15px;
+                margin: 20px 0;
+            }
+            .error-title {
+                color: #e53e3e;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+            .error-message {
+                color: #666;
+                font-size: 14px;
+            }
+            .footer {
+                text-align: center;
+                padding: 30px;
+                background: #f8f9fa;
+                border-top: 1px solid #eee;
+            }
+            .footer-text {
+                font-size: 16px;
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 5px;
+            }
+            .footer-subtext {
+                font-size: 12px;
+                color: #666;
+            }
+            .receipt-meta {
+                text-align: center;
+                padding: 15px;
+                background: #0b3d6f;
+                color: white;
+                font-size: 12px;
+            }
+            @media print {
+                body { margin: 0; padding: 0; background: white; }
+                .receipt-container { box-shadow: none; }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="receipt-container">
+            <!-- Header -->
+            <div class="header">
+                <div class="logo">HOVAPAY</div>
+                <div class="header-subtitle">Digital Payment Solutions</div>
+            </div>
+
+            <!-- Status Section -->
+            <div class="status-section">
+                <div class="status-icon">${statusIcon}</div>
+                <div class="status-text">${statusText}</div>
+                <div class="status-message">
+                    ${actualStatus === 'completed' || actualStatus === 'successful'
+            ? 'Your transaction has been completed successfully!'
+            : actualStatus === 'failed'
+                ? 'Transaction could not be completed.'
+                : 'Your transaction is being processed.'}
+                </div>
+            </div>
+
+            <!-- Transaction Details -->
+            <div class="receipt-details">
+                <div class="receipt-title">Transaction Details</div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Service</span>
+                    <span class="detail-value">${actualService}</span>
+                </div>
+                
+                ${actualPhone ? `
+                <div class="detail-row">
+                    <span class="detail-label">Phone Number</span>
+                    <span class="detail-value">${"0" + actualPhone}</span>
+                </div>
+                ` : ''}
+                
+                ${actualBillersCode ? `
+                <div class="detail-row">
+                    <span class="detail-label">Customer ID</span>
+                    <span class="detail-value">${actualBillersCode}</span>
+                </div>
+                ` : ''}
+                
+                <div class="detail-row">
+                    <span class="detail-label">Amount</span>
+                    <span class="detail-value highlight">${formatCurrency(actualAmount)}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Transaction ID</span>
+                    <span class="detail-value">${params.transactionRef}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Date & Time</span>
+                    <span class="detail-value">${formatDate(transaction?.createdAt)}</span>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Status</span>
+                    <span class="detail-value" style="color: ${statusColor};">${statusText}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Payment Method</span>
+                    <span class="detail-value">Wallet</span>
+                </div>
+
+                ${transaction?.vtpassRef ? `
+                <div class="detail-row">
+                    <span class="detail-label">VTPass Reference</span>
+                    <span class="detail-value">${transaction.vtpassRef}</span>
+                </div>
+                ` : ''}
+
+                ${(actualStatus === 'failed') ? `
+                <div class="error-section">
+                    <div class="error-title">Reason for Failure:</div>
+                    <div class="error-message">${getErrorMessage()}</div>
+                    <div class="error-message" style="color: #28a745; margin-top: 10px;">
+                        <strong>Your wallet has been refunded automatically.</strong>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <div class="footer-text">Thank you for using Hovapay!</div>
+                <div class="footer-subtext">For support, contact us at support@hovapay.com</div>
+            </div>
+
+            <!-- Receipt Meta -->
+            <div class="receipt-meta">
+                Generated on ${new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })} | 
+                This is an electronically generated receipt.
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
     };
 
+    const handleDownload = async () => {
+        try {
+            setIsDownloading(true);
+
+            // Generate PDF from HTML
+            const htmlContent = generatePDFHTML();
+            const { uri } = await printToFileAsync({
+                html: htmlContent,
+                base64: false,
+                margins: {
+                    top: 20,
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
+                },
+            });
+
+            // Generate filename with transaction reference
+            const fileName = `Hovapay_Receipt_${params.transactionRef}_${new Date().getTime()}.pdf`;
+
+            if (Platform.OS === 'ios') {
+                // iOS: Use sharing directly, as MediaLibrary requires specific asset types
+                if (await Sharing.isAvailableAsync()) {
+                    await Sharing.shareAsync(uri, {
+                        mimeType: 'application/pdf',
+                        dialogTitle: 'Save Receipt',
+                        UTI: 'com.adobe.pdf', // iOS UTI for PDF
+                    });
+
+                    Alert.alert(
+                        'Receipt Ready',
+                        'Your receipt is ready to save or share.',
+                        [
+                            { text: 'OK', style: 'default' }
+                        ]
+                    );
+                }
+            } else {
+                // Android: Use the corrected MediaLibrary approach
+                try {
+                    // Request media library permissions first
+                    const { status } = await MediaLibrary.requestPermissionsAsync();
+                    if (status !== 'granted') {
+                        Alert.alert(
+                            'Permission Required',
+                            'Please grant media library access to download the receipt.',
+                            [{ text: 'OK' }]
+                        );
+                        return;
+                    }
+
+                    // Create file path in document directory first
+                    const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+
+                    // Copy the PDF to the document directory
+                    await FileSystem.copyAsync({
+                        from: uri,
+                        to: fileUri,
+                    });
+
+                    // Create asset directly from the generated PDF uri (not the copied one)
+                    const asset = await MediaLibrary.createAssetAsync(uri);
+
+                    // Try to get Downloads album, create if it doesn't exist
+                    let album = await MediaLibrary.getAlbumAsync('Download');
+                    if (album == null) {
+                        album = await MediaLibrary.createAlbumAsync('Download', asset, false);
+                    } else {
+                        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+                    }
+
+                    // Show success message with options
+                    Alert.alert(
+                        'Receipt Downloaded',
+                        `Your receipt has been saved to Downloads as ${fileName}`,
+                        [
+                            {
+                                text: 'Open',
+                                onPress: async () => {
+                                    if (await Sharing.isAvailableAsync()) {
+                                        await Sharing.shareAsync(fileUri, {
+                                            mimeType: 'application/pdf',
+                                            dialogTitle: 'Open Receipt',
+                                        });
+                                    }
+                                },
+                            },
+                            {
+                                text: 'Share',
+                                onPress: async () => {
+                                    if (await Sharing.isAvailableAsync()) {
+                                        await Sharing.shareAsync(fileUri, {
+                                            mimeType: 'application/pdf',
+                                            dialogTitle: 'Share Receipt',
+                                        });
+                                    }
+                                },
+                            },
+                            { text: 'Done', style: 'default' },
+                        ]
+                    );
+
+                } catch (mediaError) {
+                    console.log('MediaLibrary failed, falling back to sharing:', mediaError);
+
+                    // Fallback: Just use sharing if MediaLibrary fails
+                    if (await Sharing.isAvailableAsync()) {
+                        await Sharing.shareAsync(uri, {
+                            mimeType: 'application/pdf',
+                            dialogTitle: 'Save or Share Receipt',
+                        });
+
+                        Alert.alert(
+                            'Receipt Ready',
+                            'Your receipt is ready to save or share.',
+                            [{ text: 'OK' }]
+                        );
+                    } else {
+                        throw new Error('Sharing not available');
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error('Error downloading receipt:', error);
+
+            let errorMessage = 'Failed to download receipt. Please try again.';
+
+            if (error instanceof Error) {
+                if (error.message.includes('permission')) {
+                    errorMessage = 'Permission denied. Please allow file access and try again.';
+                } else if (error.message.includes('space')) {
+                    errorMessage = 'Not enough storage space. Please free up some space and try again.';
+                } else if (error.message.includes('asset')) {
+                    errorMessage = 'Could not save to gallery. You can still share the receipt.';
+                }
+            }
+
+            Alert.alert('Download Failed', errorMessage, [
+                {
+                    text: 'Try Share Instead',
+                    onPress: async () => {
+                        try {
+                            // Fallback to sharing
+                            const htmlContent = generatePDFHTML();
+                            const { uri } = await printToFileAsync({
+                                html: htmlContent,
+                                base64: false,
+                            });
+
+                            if (await Sharing.isAvailableAsync()) {
+                                await Sharing.shareAsync(uri, {
+                                    mimeType: 'application/pdf',
+                                    dialogTitle: 'Share Receipt',
+                                });
+                            }
+                        } catch (shareError) {
+                            console.error('Share fallback failed:', shareError);
+                        }
+                    }
+                },
+                { text: 'Cancel', style: 'cancel' }
+            ]);
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    // Fixed handleRetry function for receipt.tsx
     const handleRetry = () => {
-        // Navigate back to the appropriate service screen
+        console.log('=== RETRY NAVIGATION DEBUG ===');
+        console.log('Transaction data:', transaction);
+        console.log('Params:', params);
+        console.log('Transaction serviceType:', transaction?.serviceType);
+        console.log('Params type:', params.type);
+        console.log('Transaction serviceID:', transaction?.serviceID);
+        console.log('Params network:', params.network);
+
+        // Define routes - using relative paths since we're within the bills stack
         const routes: Record<string, string> = {
-            'airtime': '/bills/airtime',
-            'data': '/bills/data',
-            'cable': '/bills/cable',
-            'electricity': '/bills/electricity',
+            'airtime': './airtime',
+            'data': './data',
+            'cable': './tv-subscription',  // Backend uses 'cable' for TV subscriptions
+            'tv-subscription': './tv-subscription',
+            'electricity': './electricity',
+            'utility': './electricity',
+            'education': './education',  // Added education route mapping
+            'insurance': './insurance',  // Added insurance route mapping
         };
 
-        const serviceType = transaction?.serviceType || params.type || 'airtime';
-        const route = routes[serviceType] || '/bills/airtime';
+        // Get service type from multiple sources
+        let serviceType = transaction?.serviceType || params.type || 'airtime';
 
-        router.push({
-            pathname: route as any,
-            params: {
-                prefill: 'true',
-                serviceID: transaction?.serviceID || '',
-                phone: actualPhone || '',
-                amount: actualAmount.toString(),
-                billersCode: actualBillersCode || '',
+        console.log('Initial serviceType:', serviceType);
+
+        // Enhanced service type detection based on serviceID
+        if (transaction?.serviceID) {
+            const serviceID = transaction.serviceID.toLowerCase();
+            console.log('Checking serviceID:', serviceID);
+
+            // Insurance services - check FIRST before other services
+            if (serviceID.includes('insurance') || serviceID.includes('policy') ||
+                ['life', 'health', 'auto', 'travel', 'property', 'business'].some(ins => serviceID.includes(ins)) ||
+                serviceID.includes('premium') || serviceID.includes('coverage') ||
+                serviceID.includes('insure')) {
+                serviceType = 'insurance';
+                console.log('Detected insurance service');
             }
-        });
+            // Education services
+            else if (['waec', 'jamb', 'neco', 'nabteb'].some(edu => serviceID.includes(edu)) ||
+                serviceID.includes('education') || serviceID.includes('school') ||
+                serviceID.includes('exam') || serviceID.includes('result')) {
+                serviceType = 'education';
+                console.log('Detected education service');
+            }
+            // TV/Cable services - your backend sets serviceType as 'cable' for TV
+            else if (['dstv', 'gotv', 'startimes', 'showmax'].includes(serviceID) ||
+                serviceID.includes('tv') || serviceID.includes('cable')) {
+                serviceType = 'tv-subscription';
+                console.log('Detected TV service, setting serviceType to tv-subscription');
+            }
+            // Data services
+            else if (serviceID.includes('data')) {
+                serviceType = 'data';
+                console.log('Detected data service');
+            }
+            // Electricity services
+            else if (serviceID.includes('elect') || serviceID.includes('power')) {
+                serviceType = 'electricity';
+                console.log('Detected electricity service');
+            }
+            // Airtime services
+            else if (['mtn', 'airtel', 'glo', 'etisalat', '9mobile'].includes(serviceID) ||
+                serviceID.includes('airtime')) {
+                serviceType = 'airtime';
+                console.log('Detected airtime service');
+            }
+        }
+
+        // Also check params.network for additional context (fallback)
+        if (params.network && !transaction?.serviceID) {
+            const network = params.network.toLowerCase();
+            console.log('Checking params.network:', network);
+
+            if (['dstv', 'gotv', 'startimes'].includes(network)) {
+                serviceType = 'tv-subscription';
+                console.log('Detected TV from params.network');
+            } else if (['waec', 'jamb', 'neco'].some(edu => network.includes(edu))) {
+                serviceType = 'education';
+                console.log('Detected education from params.network');
+            } else if (network.includes('insure') || network.includes('insurance') || ['life', 'health', 'auto', 'travel', 'property', 'business'].some(ins => network.includes(ins))) {
+                serviceType = 'insurance';
+                console.log('Detected insurance from params.network');
+            }
+        }
+
+        // Check params.type directly for insurance
+        if (params.type === 'insurance') {
+            serviceType = 'insurance';
+            console.log('Detected insurance from params.type');
+        }
+
+        // Special handling for backend serviceType 'cable'
+        if (serviceType === 'cable') {
+            serviceType = 'tv-subscription';
+            console.log('Converting cable to tv-subscription');
+        }
+
+        console.log('Final serviceType:', serviceType);
+
+        const route = routes[serviceType] || './airtime';
+        console.log('Selected route:', route);
+
+        try {
+            router.push({
+                pathname: route as any,
+                params: {
+                    prefill: 'true',
+                    serviceID: transaction?.serviceID || '',
+                    phone: actualPhone || '',
+                    amount: actualAmount.toString(),
+                    billersCode: actualBillersCode || '',
+                    network: params.network || '',
+                    // Add more context for debugging
+                    retryFrom: 'receipt',
+                    originalServiceType: transaction?.serviceType || params.type,
+                }
+            });
+            console.log('Navigation successful');
+        } catch (error) {
+            console.error('Navigation failed:', error);
+
+            // Fallback navigation
+            console.log('Attempting fallback navigation...');
+            try {
+                if (serviceType === 'education') {
+                    router.push('/bills/education');
+                } else if (serviceType === 'insurance') {
+                    router.push('/bills/insurance');
+                } else if (serviceType === 'tv-subscription') {
+                    router.push('/bills/tv-subscription');
+                } else if (serviceType === 'electricity') {
+                    router.push('/bills/electricity');
+                } else if (serviceType === 'data') {
+                    router.push('/bills/data');
+                } else {
+                    router.push('/bills/airtime');
+                }
+            } catch (fallbackError) {
+                console.error('Fallback navigation also failed:', fallbackError);
+                // Last resort - go back to bills index
+                router.push('/bills');
+            }
+        }
+
+        console.log('=== END RETRY NAVIGATION DEBUG ===');
     };
 
     const ReceiptRow = ({ label, value, highlight = false }: {
@@ -361,7 +923,7 @@ Powered by Hovapay
                     />
 
                     {actualPhone && (
-                        <ReceiptRow label="Phone Number" value={`0${actualPhone}`} />
+                        <ReceiptRow label="Phone Number" value={actualPhone} />
                     )}
 
                     {actualBillersCode && (
@@ -410,11 +972,23 @@ Powered by Hovapay
                     <TouchableOpacity
                         style={[styles.actionButton, styles.downloadButton]}
                         onPress={handleDownload}
+                        disabled={isDownloading}
                     >
-                        <MaterialIcons name="download" size={20} color={COLORS.primary} />
-                        <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>
-                            Download PDF
-                        </Text>
+                        {isDownloading ? (
+                            <>
+                                <ActivityIndicator size="small" color={COLORS.primary} />
+                                <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>
+                                    Generating PDF...
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <MaterialIcons name="download" size={20} color={COLORS.primary} />
+                                <Text style={[styles.actionButtonText, { color: COLORS.primary }]}>
+                                    Download PDF
+                                </Text>
+                            </>
+                        )}
                     </TouchableOpacity>
 
                     <TouchableOpacity

@@ -66,6 +66,13 @@ export default function BillsLayout() {
                         title: 'Other Services',
                     }}
                 />
+                <Stack.Screen
+                    name="receipt"
+                    options={{
+                        title: 'Transaction Receipt',
+                        animation: 'slide_from_bottom', // Different animation for receipt
+                    }}
+                />
             </Stack>
             <StatusBar style="light" />
         </>

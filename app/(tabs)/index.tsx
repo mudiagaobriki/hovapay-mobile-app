@@ -1,4 +1,4 @@
-// app/(tabs)/index.tsx - Fixed Redux selector usage
+// app/(tabs)/index.tsx - Complete Updated Dashboard with Fixed Transactions
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -24,6 +24,7 @@ import {
   useGetServiceCategoriesQuery,
   useGetServicesByCategoryQuery,
   useGetTransactionHistoryQuery,
+  useGetBillHistoryQuery,
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
@@ -91,18 +92,28 @@ export default function DashboardScreen() {
   // API queries
   const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
   const { data: serviceCategories } = useGetServiceCategoriesQuery();
-  const { data: transactionData } = useGetTransactionHistoryQuery({
+
+  // Fetch both wallet transactions and bill payment history
+  const { data: walletTransactionData } = useGetTransactionHistoryQuery({
     page: 1,
     limit: 5
   });
 
-  // console.log("serviceCategories: ", serviceCategories);
+  const { data: billHistoryData } = useGetBillHistoryQuery({
+    page: 1,
+    limit: 5
+  });
 
   // Get common bill services
   const { data: electricityServices } = useGetServicesByCategoryQuery('electricity-bill');
   const { data: airtimeServices } = useGetServicesByCategoryQuery('airtime');
   const { data: dataServices } = useGetServicesByCategoryQuery('data');
   const { data: tvServices } = useGetServicesByCategoryQuery('tv-subscription');
+
+  // Debug logs
+  console.log('Dashboard Debug:');
+  console.log('walletTransactionData:', walletTransactionData);
+  console.log('billHistoryData:', billHistoryData);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -146,6 +157,199 @@ export default function DashboardScreen() {
     ...(serviceCategories?.content || []),
     { identifier: 'bulk-sms', name: 'Bulk SMS' }
   ];
+
+  // Combine and sort transactions - Corrected based on actual API response
+  const getAllTransactions = () => {
+    // Wallet transactions structure: { transactions: [...], pagination: {...} }
+    const walletTransactions = walletTransactionData?.transactions || [];
+
+    // Bill history structure: { docs: [...], totalDocs: 8, limit: 10, etc }
+    const billTransactions = billHistoryData?.docs || [];
+
+    console.log('Processing transactions:');
+    console.log('- Wallet transactions:', walletTransactions.length);
+    console.log('- Bill transactions:', billTransactions.length);
+
+    // Convert bill transactions to match wallet transaction format
+    const normalizedBillTransactions = billTransactions.map((bill: any) => {
+      const serviceTypeFormatted = bill.serviceType ?
+          bill.serviceType.charAt(0).toUpperCase() + bill.serviceType.slice(1) :
+          'Bill';
+
+      return {
+        id: bill._id,
+        type: 'bill_payment',
+        amount: bill.amount,
+        description: `${serviceTypeFormatted} Payment`,
+        status: bill.status,
+        reference: bill.transactionRef,
+        createdAt: bill.createdAt,
+        updatedAt: bill.updatedAt,
+        serviceType: bill.serviceType,
+        serviceID: bill.serviceID,
+        phone: bill.phone,
+        paymentMethod: bill.paymentMethod,
+        metadata: {
+          serviceType: bill.serviceType,
+          serviceID: bill.serviceID,
+          phone: bill.phone,
+          vtpassRef: bill.vtpassRef,
+          responseData: bill.responseData
+        }
+      };
+    });
+
+    console.log('Normalized bill transactions:', normalizedBillTransactions);
+
+    // Combine and sort by date (newest first)
+    const allTransactions = [...walletTransactions, ...normalizedBillTransactions];
+    const sortedTransactions = allTransactions.sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    console.log('Final sorted transactions:', sortedTransactions.length);
+    return sortedTransactions;
+  };
+
+  // Enhanced renderTransaction function
+  const renderTransaction = (transaction: any) => {
+    const getTransactionIcon = (type: string, status?: string) => {
+      if (type === 'bill_payment') {
+        if (status === 'failed') return 'error';
+        if (status === 'pending') return 'hourglass-empty';
+        return 'receipt';
+      }
+
+      switch (type) {
+        case 'deposit':
+          return 'add';
+        case 'transfer':
+          return 'swap-horiz';
+        case 'refund':
+          return 'keyboard-return';
+        default:
+          return 'receipt';
+      }
+    };
+
+    const getTransactionTitle = (transaction: any) => {
+      if (transaction.type === 'bill_payment') {
+        if (transaction.serviceType && transaction.serviceID) {
+          const networkName = transaction.serviceID.toUpperCase();
+          const serviceType = transaction.serviceType.charAt(0).toUpperCase() +
+              transaction.serviceType.slice(1);
+          return `${networkName} ${serviceType}`;
+        }
+        return transaction.description || 'Bill Payment';
+      }
+      return transaction.description || transaction.type || 'Transaction';
+    };
+
+    const getTransactionSubtitle = (transaction: any) => {
+      if (transaction.type === 'bill_payment') {
+        if (transaction.phone) {
+          // Format phone number nicely
+          const phone = transaction.phone.toString();
+          if (phone.length === 10) {
+            return `0${phone}`;
+          } else if (phone.length === 11 && phone.startsWith('0')) {
+            return phone;
+          } else if (phone.length === 10 || phone.length === 11) {
+            return phone.startsWith('0') ? phone : `0${phone}`;
+          }
+          return phone;
+        }
+      }
+      return formatDate(transaction.createdAt || transaction.date);
+    };
+
+    const getStatusColor = (status: string) => {
+      switch (status) {
+        case 'completed':
+        case 'success':
+        case 'successful':
+          return COLORS.success;
+        case 'failed':
+          return COLORS.error;
+        case 'pending':
+          return COLORS.warning;
+        default:
+          return COLORS.textSecondary;
+      }
+    };
+
+    return (
+        <TouchableOpacity
+            key={transaction.id || transaction._id}
+            style={styles.transactionItem}
+            onPress={() => {
+              if (transaction.type === 'bill_payment' && transaction.reference) {
+                // Navigate to receipt screen for bill payments
+                router.push({
+                  pathname: '/bills/receipt',
+                  params: {
+                    transactionRef: transaction.reference,
+                    type: transaction.serviceType,
+                    phone: transaction.phone,
+                    amount: transaction.amount.toString(),
+                    status: transaction.status,
+                    serviceID: transaction.serviceID,
+                  }
+                });
+              } else {
+                // Navigate to transactions tab for wallet transactions
+                router.push('/(tabs)/transactions');
+              }
+            }}
+            activeOpacity={0.7}
+        >
+          <View style={styles.transactionLeft}>
+            <View style={[
+              styles.transactionIcon,
+              { backgroundColor: getStatusColor(transaction.status) + '20' }
+            ]}>
+              <MaterialIcons
+                  name={getTransactionIcon(transaction.type, transaction.status)}
+                  size={16}
+                  color={getStatusColor(transaction.status)}
+              />
+            </View>
+            <View style={styles.transactionDetails}>
+              <Text style={styles.transactionService}>
+                {getTransactionTitle(transaction)}
+              </Text>
+              <Text style={styles.transactionDate}>
+                {getTransactionSubtitle(transaction)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.transactionRight}>
+            <Text style={[
+              styles.transactionAmount,
+              {
+                color: transaction.type === 'deposit' || transaction.type === 'refund'
+                    ? COLORS.success
+                    : COLORS.textPrimary
+              }
+            ]}>
+              {transaction.type === 'deposit' || transaction.type === 'refund' ? '+' : '-'}
+              {formatCurrency(transaction.amount)}
+            </Text>
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: getStatusColor(transaction.status) + '20' }
+            ]}>
+              <Text style={[
+                styles.statusText,
+                { color: getStatusColor(transaction.status) }
+              ]}>
+                {transaction.status}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+    );
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -210,64 +414,6 @@ export default function DashboardScreen() {
           <MaterialIcons name={action.icon as any} size={18} color={COLORS.primary} />
         </View>
         <Text style={styles.quickActionTitle}>{action.title}</Text>
-      </TouchableOpacity>
-  );
-
-  const renderTransaction = (transaction: any) => (
-      <TouchableOpacity
-          key={transaction._id || transaction.id}
-          style={styles.transactionItem}
-          onPress={() => router.push('/(tabs)/transactions')}
-          activeOpacity={0.7}
-      >
-        <View style={styles.transactionLeft}>
-          <View style={styles.transactionIcon}>
-            <MaterialIcons
-                name={transaction.type === 'deposit' ? 'add' : 'receipt'}
-                size={16}
-                color={COLORS.primary}
-            />
-          </View>
-          <View style={styles.transactionDetails}>
-            <Text style={styles.transactionService}>
-              {transaction.description || transaction.serviceType || 'Transaction'}
-            </Text>
-            <Text style={styles.transactionDate}>
-              {formatDate(transaction.createdAt || transaction.date)}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.transactionRight}>
-          <Text style={[
-            styles.transactionAmount,
-            { color: transaction.type === 'deposit' ? COLORS.success : COLORS.textPrimary }
-          ]}>
-            {transaction.type === 'deposit' ? '+' : '-'}{formatCurrency(transaction.amount)}
-          </Text>
-          <View style={[
-            styles.statusBadge,
-            {
-              backgroundColor: transaction.status === 'completed' || transaction.status === 'success'
-                  ? COLORS.success + '20'
-                  : transaction.status === 'pending'
-                      ? COLORS.warning + '20'
-                      : COLORS.error + '20'
-            }
-          ]}>
-            <Text style={[
-              styles.statusText,
-              {
-                color: transaction.status === 'completed' || transaction.status === 'success'
-                    ? COLORS.success
-                    : transaction.status === 'pending'
-                        ? COLORS.warning
-                        : COLORS.error
-              }
-            ]}>
-              {transaction.status}
-            </Text>
-          </View>
-        </View>
       </TouchableOpacity>
   );
 
@@ -456,21 +602,65 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.transactionsList}>
-              {transactionData?.transactions?.length ? (
-                  transactionData.transactions.slice(0, 3).map(renderTransaction)
-              ) : (
-                  <View style={styles.emptyState}>
-                    <MaterialIcons name="receipt-long" size={48} color={COLORS.textTertiary} />
-                    <Text style={styles.emptyStateText}>No transactions yet</Text>
-                    <Text style={styles.emptyStateSubtext}>Your transaction history will appear here</Text>
-                    <TouchableOpacity
-                        style={styles.viewHistoryButton}
-                        onPress={() => router.push('/(tabs)/transactions')}
-                    >
-                      <Text style={styles.viewHistoryButtonText}>View Transaction History</Text>
-                    </TouchableOpacity>
-                  </View>
-              )}
+              {(() => {
+                // Show loading state while data is being fetched
+                if (walletTransactionData === undefined && billHistoryData === undefined) {
+                  return (
+                      <View style={styles.emptyState}>
+                        <MaterialIcons name="hourglass-empty" size={48} color={COLORS.textTertiary} />
+                        <Text style={styles.emptyStateText}>Loading transactions...</Text>
+                      </View>
+                  );
+                }
+
+                const allTransactions = getAllTransactions();
+
+                if (allTransactions.length > 0) {
+                  return (
+                      <>
+                        {allTransactions.slice(0, 5).map(renderTransaction)}
+                        {/* Show total count if there are more transactions */}
+                        {allTransactions.length > 5 && (
+                            <View style={styles.moreTransactionsIndicator}>
+                              <Text style={styles.moreTransactionsText}>
+                                +{allTransactions.length - 5} more transactions
+                              </Text>
+                            </View>
+                        )}
+                      </>
+                  );
+                } else {
+                  return (
+                      <View style={styles.emptyState}>
+                        <MaterialIcons name="receipt-long" size={48} color={COLORS.textTertiary} />
+                        <Text style={styles.emptyStateText}>No transactions yet</Text>
+                        <Text style={styles.emptyStateSubtext}>
+                          Start by buying airtime or paying bills
+                        </Text>
+
+                        {/* Debug info in development */}
+                        {__DEV__ && (
+                            <View style={styles.debugInfo}>
+                              <Text style={styles.debugText}>
+                                Debug Info:{'\n'}
+                                Bills API: {billHistoryData ? 'Connected' : 'No data'}
+                                ({billHistoryData?.docs?.length || 0} bills){'\n'}
+                                Wallet API: {walletTransactionData ? 'Connected' : 'No data'}
+                                ({walletTransactionData?.transactions?.length || 0} transactions)
+                              </Text>
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            style={styles.viewHistoryButton}
+                            onPress={() => router.push('/bills/airtime')}
+                        >
+                          <Text style={styles.viewHistoryButtonText}>Make Your First Transaction</Text>
+                        </TouchableOpacity>
+                      </View>
+                  );
+                }
+              })()}
             </View>
           </View>
 
@@ -751,6 +941,18 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.fontWeights.medium,
     textTransform: 'capitalize',
   },
+  moreTransactionsIndicator: {
+    paddingVertical: SPACING.sm,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    marginTop: SPACING.sm,
+  },
+  moreTransactionsText: {
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING['2xl'],
@@ -767,6 +969,18 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     textAlign: 'center',
     marginBottom: SPACING.base,
+  },
+  debugInfo: {
+    marginTop: 10,
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+    alignSelf: 'stretch',
+  },
+  debugText: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
   },
   viewHistoryButton: {
     backgroundColor: COLORS.primary,

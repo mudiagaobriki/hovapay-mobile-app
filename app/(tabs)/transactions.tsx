@@ -1,5 +1,5 @@
-// app/(tabs)/transactions.tsx - Enhanced with Virtual Account transactions
-import React, { useState } from 'react';
+// app/(tabs)/transactions.tsx - Enhanced with Combined Transaction History
+import React, { useState, useMemo } from 'react';
 import {
     StyleSheet,
     View,
@@ -20,7 +20,7 @@ import {
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
-type TransactionFilter = 'all' | 'deposit' | 'withdrawal' | 'bill_payment' | 'transfer' | 'virtual_account_credit';
+type TransactionFilter = 'all' | 'deposit' | 'withdrawal' | 'bill_payment' | 'transfer' | 'virtual_account_credit' | 'refund';
 
 interface FilterOption {
     id: TransactionFilter;
@@ -35,6 +35,7 @@ const filterOptions: FilterOption[] = [
     { id: 'virtual_account_credit', label: 'Bank Transfer', icon: 'account-balance', color: COLORS.info },
     { id: 'bill_payment', label: 'Bills', icon: 'receipt', color: COLORS.warning },
     { id: 'transfer', label: 'Transfer', icon: 'send', color: COLORS.primary },
+    { id: 'refund', label: 'Refunds', icon: 'keyboard-return', color: COLORS.success },
     { id: 'withdrawal', label: 'Withdraw', icon: 'remove-circle', color: COLORS.error },
 ];
 
@@ -44,11 +45,80 @@ export default function TransactionsScreen() {
     const [activeFilter, setActiveFilter] = useState<TransactionFilter>('all');
     const [page, setPage] = useState(1);
 
-    const { data: transactionData, refetch: refetchTransactions, isLoading } = useGetTransactionHistoryQuery({
+    // Fetch both wallet transactions and bill payment history
+    const { data: walletTransactionData, refetch: refetchWalletTransactions, isLoading: walletLoading } = useGetTransactionHistoryQuery({
         page,
-        limit: 20,
-        type: activeFilter === 'all' ? undefined : activeFilter,
+        limit: 50, // Increase limit to get more transactions
+        type: activeFilter === 'all' || activeFilter === 'bill_payment' ? undefined : activeFilter,
     });
+
+    const { data: billHistoryData, refetch: refetchBillHistory, isLoading: billLoading } = useGetBillHistoryQuery({
+        page,
+        limit: 50, // Increase limit to get more transactions
+    });
+
+    console.log('Transactions Screen Debug:');
+    console.log('walletTransactionData:', walletTransactionData);
+    console.log('billHistoryData:', billHistoryData);
+
+    // Combine and process all transactions
+    const allTransactions = useMemo(() => {
+        const walletTransactions = walletTransactionData?.transactions || [];
+        const billTransactions = billHistoryData?.docs || [];
+
+        console.log('Processing transactions:');
+        console.log('- Wallet transactions:', walletTransactions.length);
+        console.log('- Bill transactions:', billTransactions.length);
+
+        // Convert bill transactions to match wallet transaction format
+        const normalizedBillTransactions = billTransactions.map((bill: any) => {
+            const serviceTypeFormatted = bill.serviceType ?
+                bill.serviceType.charAt(0).toUpperCase() + bill.serviceType.slice(1) :
+                'Bill';
+
+            return {
+                _id: bill._id,
+                id: bill._id,
+                type: 'bill_payment',
+                amount: bill.amount,
+                description: `${serviceTypeFormatted} Payment`,
+                status: bill.status,
+                reference: bill.transactionRef,
+                createdAt: bill.createdAt,
+                updatedAt: bill.updatedAt,
+                serviceType: bill.serviceType,
+                serviceID: bill.serviceID,
+                phone: bill.phone,
+                paymentMethod: bill.paymentMethod,
+                vtpassRef: bill.vtpassRef,
+                responseData: bill.responseData,
+                metadata: {
+                    serviceType: bill.serviceType,
+                    serviceID: bill.serviceID,
+                    phone: bill.phone,
+                    vtpassRef: bill.vtpassRef,
+                    responseData: bill.responseData
+                }
+            };
+        });
+
+        // Combine and sort by date (newest first)
+        const combined = [...walletTransactions, ...normalizedBillTransactions];
+        const sorted = combined.sort((a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+
+        console.log('Combined transactions:', sorted.length);
+        return sorted;
+    }, [walletTransactionData, billHistoryData]);
+
+    // Filter transactions based on active filter
+    const filteredTransactions = useMemo(() => {
+        if (activeFilter === 'all') {
+            return allTransactions;
+        }
+        return allTransactions.filter(transaction => transaction.type === activeFilter);
+    }, [allTransactions, activeFilter]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-NG', {
@@ -87,7 +157,10 @@ export default function TransactionsScreen() {
     const onRefresh = async () => {
         setRefreshing(true);
         try {
-            await refetchTransactions();
+            await Promise.all([
+                refetchWalletTransactions(),
+                refetchBillHistory()
+            ]);
         } finally {
             setRefreshing(false);
         }
@@ -100,23 +173,40 @@ export default function TransactionsScreen() {
             case 'virtual_account_credit':
                 return 'account-balance';
             case 'bill_payment':
+                if (transaction.status === 'failed') return 'error';
+                if (transaction.status === 'pending') return 'hourglass-empty';
                 return 'receipt';
             case 'transfer':
                 return 'send';
             case 'withdrawal':
                 return 'remove-circle';
+            case 'refund':
+                return 'keyboard-return';
             default:
                 return 'receipt';
         }
     };
 
     const getTransactionColor = (transaction: any) => {
+        if (transaction.type === 'bill_payment') {
+            switch (transaction.status) {
+                case 'completed':
+                case 'successful':
+                    return COLORS.success;
+                case 'failed':
+                    return COLORS.error;
+                case 'pending':
+                    return COLORS.warning;
+                default:
+                    return COLORS.textSecondary;
+            }
+        }
+
         switch (transaction.type) {
             case 'deposit':
             case 'virtual_account_credit':
+            case 'refund':
                 return COLORS.success;
-            case 'bill_payment':
-                return COLORS.warning;
             case 'transfer':
                 return COLORS.primary;
             case 'withdrawal':
@@ -127,33 +217,82 @@ export default function TransactionsScreen() {
     };
 
     const getTransactionDescription = (transaction: any) => {
+        if (transaction.type === 'bill_payment') {
+            if (transaction.serviceType && transaction.serviceID) {
+                const networkName = transaction.serviceID.toUpperCase();
+                const serviceType = transaction.serviceType.charAt(0).toUpperCase() +
+                    transaction.serviceType.slice(1);
+                return `${networkName} ${serviceType}`;
+            }
+            return transaction.description || 'Bill Payment';
+        }
+
         switch (transaction.type) {
             case 'virtual_account_credit':
                 return 'Bank Transfer';
-            case 'bill_payment':
-                return transaction.serviceType || 'Bill Payment';
             case 'deposit':
                 return 'Wallet Funding';
             case 'transfer':
                 return 'Money Transfer';
             case 'withdrawal':
                 return 'Withdrawal';
+            case 'refund':
+                return 'Refund';
             default:
                 return transaction.description || 'Transaction';
         }
     };
 
     const getTransactionSubtitle = (transaction: any) => {
+        if (transaction.type === 'bill_payment') {
+            if (transaction.phone) {
+                // Format phone number nicely
+                const phone = transaction.phone.toString();
+                if (phone.length === 10) {
+                    return `0${phone}`;
+                } else if (phone.length === 11 && phone.startsWith('0')) {
+                    return phone;
+                } else if (phone.length === 10 || phone.length === 11) {
+                    return phone.startsWith('0') ? phone : `0${phone}`;
+                }
+                return phone;
+            }
+            return `Ref: ${transaction.reference?.substring(0, 10)}...`;
+        }
+
         if (transaction.type === 'virtual_account_credit') {
             return 'Via Dedicated Account';
         }
-        if (transaction.type === 'bill_payment' && transaction.serviceType) {
-            return `${transaction.serviceType} - ${transaction.reference?.substring(0, 8)}...`;
-        }
+
         if (transaction.reference) {
             return `Ref: ${transaction.reference.substring(0, 10)}...`;
         }
+
         return formatTime(transaction.createdAt || transaction.date);
+    };
+
+    const handleTransactionPress = (transaction: any) => {
+        console.log('Transaction pressed:', transaction);
+
+        if (transaction.type === 'bill_payment') {
+            // Navigate to receipt screen for bill payments
+            router.push({
+                pathname: '/bills/receipt',
+                params: {
+                    transactionRef: transaction.reference,
+                    type: transaction.serviceType,
+                    phone: transaction.phone,
+                    amount: transaction.amount.toString(),
+                    status: transaction.status,
+                    serviceID: transaction.serviceID,
+                }
+            });
+        } else {
+            // For other transaction types, you could navigate to a general transaction details screen
+            // or show more details in a modal
+            console.log('Other transaction type details:', transaction);
+            // TODO: Implement general transaction details screen if needed
+        }
     };
 
     const renderFilterChip = (filter: FilterOption) => (
@@ -185,10 +324,7 @@ export default function TransactionsScreen() {
     const renderTransaction = ({ item: transaction }: { item: any }) => (
         <TouchableOpacity
             style={styles.transactionCard}
-            onPress={() => {
-                // Navigate to transaction details
-                console.log('Transaction details:', transaction._id);
-            }}
+            onPress={() => handleTransactionPress(transaction)}
             activeOpacity={0.7}
         >
             <View style={styles.transactionLeft}>
@@ -218,12 +354,16 @@ export default function TransactionsScreen() {
                 <Text style={[
                     styles.transactionAmount,
                     {
-                        color: (transaction.type === 'deposit' || transaction.type === 'virtual_account_credit')
+                        color: (transaction.type === 'deposit' ||
+                            transaction.type === 'virtual_account_credit' ||
+                            transaction.type === 'refund')
                             ? COLORS.success
                             : COLORS.textPrimary
                     }
                 ]}>
-                    {(transaction.type === 'deposit' || transaction.type === 'virtual_account_credit') ? '+' : '-'}
+                    {(transaction.type === 'deposit' ||
+                        transaction.type === 'virtual_account_credit' ||
+                        transaction.type === 'refund') ? '+' : '-'}
                     {formatCurrency(transaction.amount)}
                 </Text>
                 <View style={[
@@ -269,20 +409,34 @@ export default function TransactionsScreen() {
                     : `You haven't made any ${filterOptions.find(f => f.id === activeFilter)?.label.toLowerCase()} yet.`
                 }
             </Text>
+
+            {/* Debug info in development */}
+            {__DEV__ && (
+                <View style={styles.debugInfo}>
+                    <Text style={styles.debugText}>
+                        Debug Info:{'\n'}
+                        All Transactions: {allTransactions.length}{'\n'}
+                        Filtered: {filteredTransactions.length}{'\n'}
+                        Bills: {billHistoryData?.docs?.length || 0}{'\n'}
+                        Wallet: {walletTransactionData?.transactions?.length || 0}
+                    </Text>
+                </View>
+            )}
+
             {activeFilter === 'all' && (
                 <TouchableOpacity
                     style={styles.emptyStateButton}
-                    onPress={() => router.push('/wallet/fund')}
+                    onPress={() => router.push('/bills/airtime')}
                 >
-                    <MaterialIcons name="add" size={20} color={COLORS.textInverse} />
-                    <Text style={styles.emptyStateButtonText}>Fund Wallet</Text>
+                    <MaterialIcons name="receipt" size={20} color={COLORS.textInverse} />
+                    <Text style={styles.emptyStateButtonText}>Make a Transaction</Text>
                 </TouchableOpacity>
             )}
         </View>
     );
 
-    const transactions = transactionData?.transactions || [];
-    const hasTransactions = transactions.length > 0;
+    const hasTransactions = filteredTransactions.length > 0;
+    const isLoading = walletLoading || billLoading;
 
     return (
         <SafeAreaView style={styles.container}>
@@ -296,7 +450,7 @@ export default function TransactionsScreen() {
                 <View style={styles.headerContent}>
                     <Text style={styles.headerTitle}>Transactions</Text>
                     <Text style={styles.headerSubtitle}>
-                        {hasTransactions ? `${transactions.length} transactions` : 'Transaction history'}
+                        {hasTransactions ? `${filteredTransactions.length} transactions` : 'Transaction history'}
                     </Text>
                 </View>
             </LinearGradient>
@@ -318,14 +472,14 @@ export default function TransactionsScreen() {
                 {hasTransactions && (
                     <View style={styles.summaryCard}>
                         <View style={styles.summaryItem}>
-                            <Text style={styles.summaryLabel}>Total Transactions</Text>
-                            <Text style={styles.summaryValue}>{transactions.length}</Text>
+                            <Text style={styles.summaryLabel}>Total Showing</Text>
+                            <Text style={styles.summaryValue}>{filteredTransactions.length}</Text>
                         </View>
                         <View style={styles.summaryDivider} />
                         <View style={styles.summaryItem}>
                             <Text style={styles.summaryLabel}>This Month</Text>
                             <Text style={styles.summaryValue}>
-                                {transactions.filter(t => {
+                                {filteredTransactions.filter(t => {
                                     const transactionDate = new Date(t.createdAt || t.date);
                                     const now = new Date();
                                     return transactionDate.getMonth() === now.getMonth() &&
@@ -338,7 +492,7 @@ export default function TransactionsScreen() {
 
                 {/* Transactions List */}
                 <FlatList
-                    data={transactions}
+                    data={filteredTransactions}
                     keyExtractor={(item) => item._id || item.id}
                     renderItem={renderTransaction}
                     contentContainerStyle={[
@@ -513,6 +667,18 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.medium,
         textTransform: 'capitalize',
     },
+    debugInfo: {
+        marginTop: 10,
+        padding: 8,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 4,
+        alignSelf: 'stretch',
+    },
+    debugText: {
+        fontSize: 10,
+        color: '#666',
+        textAlign: 'center',
+    },
     emptyState: {
         alignItems: 'center',
         paddingVertical: SPACING['4xl'],
@@ -541,6 +707,7 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.sm,
         borderRadius: RADIUS.lg,
         ...SHADOWS.colored(COLORS.primary),
+        marginTop: SPACING.base,
     },
     emptyStateButtonText: {
         color: COLORS.textInverse,

@@ -1,4 +1,4 @@
-// app/bills/data.tsx
+// app/bills/data.tsx - Fixed with Pure React Native Components
 import React, { useState } from 'react';
 import {
     StyleSheet,
@@ -11,8 +11,9 @@ import {
     Image,
     Alert,
     ActivityIndicator,
+    TextInput,
 } from 'react-native';
-import { Text, Input, FormControl } from 'native-base';
+import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -55,11 +56,13 @@ export default function DataScreen() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const { data: dataServices } = useGetServicesByCategoryQuery('data');
-    const { data: walletData } = useGetWalletBalanceQuery();
+    const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const { data: variations, isLoading: variationsLoading, error: variationsError } = useGetServiceVariationsQuery(
         selectedNetwork?.serviceID,
         { skip: !selectedNetwork }
     );
+
+    const [payBill, { isLoading }] = usePayBillMutation();
 
     // Debug log to see the variations structure
     React.useEffect(() => {
@@ -71,8 +74,6 @@ export default function DataScreen() {
         }
     }, [variations, variationsError]);
 
-    const [payBill, { isLoading }] = usePayBillMutation();
-
     const networks = dataServices?.content?.filter(service =>
         ['mtn-data', 'airtel-data', 'glo-data', 'etisalat-data'].includes(service.serviceID)
     ) || [];
@@ -83,6 +84,36 @@ export default function DataScreen() {
             currency: 'NGN',
             minimumFractionDigits: 0,
         }).format(amount);
+    };
+
+    // Phone number validation for networks
+    const validatePhoneNumber = (phone: string, network: string) => {
+        // VTPass sandbox test numbers - allow these for any network
+        const testNumbers = [
+            '08011111111', // Successful test
+            '201000000000', // Pending test
+            '500000000000', // Unexpected response test
+            '400000000000', // No response test
+            '300000000000', // Timeout test
+        ];
+
+        // If it's a test number, allow it for any network
+        if (testNumbers.includes(phone)) {
+            return true;
+        }
+
+        // Regular validation for real phone numbers
+        const networkPrefixes = {
+            'mtn-data': ['0803', '0806', '0813', '0816', '0903', '0906', '0913', '0916'],
+            'airtel-data': ['0802', '0808', '0812', '0901', '0907', '0911'],
+            'glo-data': ['0805', '0807', '0811', '0815', '0905', '0915'],
+            'etisalat-data': ['0809', '0817', '0818', '0908', '0909']
+        };
+
+        const prefix = phone.substring(0, 4);
+        const validPrefixes = networkPrefixes[network.toLowerCase()] || [];
+
+        return validPrefixes.includes(prefix);
     };
 
     // Filter data plans based on search query
@@ -114,30 +145,143 @@ export default function DataScreen() {
             return;
         }
 
+        // Validate phone number against selected network
+        if (!validatePhoneNumber(values.phone, selectedNetwork.serviceID)) {
+            Alert.alert(
+                'Invalid Phone Number',
+                `The phone number ${values.phone} does not match the selected ${selectedNetwork.name.replace(' Data', '')} network. Please check and try again.`
+            );
+            return;
+        }
+
+        // Check wallet balance
         if (walletData && selectedPlan.variation_amount > walletData.data.balance) {
-            Alert.alert('Insufficient Balance', 'Please fund your wallet to continue');
+            const shortfall = selectedPlan.variation_amount - walletData.data.balance;
+            Alert.alert(
+                'Insufficient Balance',
+                `You need ${formatCurrency(shortfall)} more to complete this transaction.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Fund Wallet',
+                        onPress: () => router.push('/(tabs)/wallet'),
+                        style: 'default'
+                    }
+                ]
+            );
             return;
         }
 
         try {
-            const result = await payBill({
+            // Prepare the payload according to VTPass data API specification
+            const payload = {
+                request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 serviceID: selectedNetwork.serviceID,
                 billersCode: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
                 variation_code: selectedPlan.variation_code,
                 amount: selectedPlan.variation_amount,
-                phone: `+234${values.phone.substring(1)}`,
-            }).unwrap();
+                phone: values.phone,
+            };
 
-            Alert.alert(
-                'Purchase Successful!',
-                `${selectedPlan.name} has been activated on ${values.phone}`,
-                [{ text: 'OK', onPress: () => router.back() }]
-            );
+            console.log('Sending data purchase request:', payload);
+
+            const result = await payBill(payload).unwrap();
+
+            console.log('Data purchase result:', result);
+
+            // Check the actual success status from the response
+            const isActuallySuccessful = result.success === true;
+
+            console.log('Transaction status check:', {
+                resultSuccess: result.success,
+                resultMessage: result.message,
+                resultData: result.data,
+                isActuallySuccessful
+            });
+
+            // Refetch wallet balance to update UI
+            refetchWallet();
+
+            if (isActuallySuccessful) {
+                // Success
+                Alert.alert(
+                    'Purchase Successful!',
+                    `${selectedPlan.name} has been activated on ${values.phone}`,
+                    [
+                        {
+                            text: 'View Receipt',
+                            onPress: () => {
+                                router.push({
+                                    pathname: '/bills/receipt',
+                                    params: {
+                                        transactionRef: result.data?.transactionRef || payload.request_id,
+                                        type: 'data',
+                                        network: selectedNetwork.name.replace(' Data', ''),
+                                        phone: values.phone,
+                                        amount: selectedPlan.variation_amount.toString(),
+                                        status: 'successful',
+                                        serviceName: selectedPlan.name
+                                    }
+                                });
+                            }
+                        },
+                        {
+                            text: 'Done',
+                            onPress: () => router.back(),
+                            style: 'default'
+                        }
+                    ]
+                );
+            } else {
+                // Transaction failed
+                const errorMessage = result.message || result.data?.vtpassResponse?.message || 'Transaction failed. Please try again.';
+
+                Alert.alert(
+                    'Transaction Failed',
+                    errorMessage,
+                    [
+                        {
+                            text: 'View Details',
+                            onPress: () => {
+                                router.push({
+                                    pathname: '/bills/receipt',
+                                    params: {
+                                        transactionRef: result.data?.transactionRef || payload.request_id,
+                                        type: 'data',
+                                        network: selectedNetwork.name.replace(' Data', ''),
+                                        phone: values.phone,
+                                        amount: selectedPlan.variation_amount.toString(),
+                                        status: 'failed',
+                                        errorMessage: errorMessage,
+                                        serviceName: selectedPlan.name
+                                    }
+                                });
+                            }
+                        },
+                        {
+                            text: 'Try Again',
+                            style: 'default'
+                        }
+                    ]
+                );
+            }
         } catch (error: any) {
-            Alert.alert(
-                'Purchase Failed',
-                error.message || 'Something went wrong. Please try again.'
-            );
+            console.error('Data purchase error:', error);
+
+            let errorMessage = 'Something went wrong. Please try again.';
+
+            if (error.data?.message) {
+                errorMessage = error.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            Alert.alert('Purchase Failed', errorMessage, [
+                {
+                    text: 'OK',
+                    style: 'default'
+                }
+            ]);
         }
     };
 
@@ -245,36 +389,31 @@ export default function DataScreen() {
                             {/* Phone Number */}
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Phone Number</Text>
-                                <FormControl isInvalid={touched.phone && errors.phone}>
-                                    <View style={[
-                                        styles.inputContainer,
-                                        touched.phone && errors.phone && styles.inputContainerError
-                                    ]}>
-                                        <MaterialIcons
-                                            name="phone"
-                                            size={20}
-                                            color={COLORS.textTertiary}
-                                            style={styles.inputIcon}
-                                        />
-                                        <Input
-                                            flex={1}
-                                            variant="unstyled"
-                                            placeholder="08012345678"
-                                            placeholderTextColor={COLORS.textTertiary}
-                                            value={values.phone}
-                                            onChangeText={handleChange('phone')}
-                                            onBlur={handleBlur('phone')}
-                                            keyboardType="phone-pad"
-                                            maxLength={11}
-                                            fontSize={TYPOGRAPHY.fontSizes.base}
-                                            color={COLORS.textPrimary}
-                                            _focus={{ borderWidth: 0 }}
-                                        />
-                                    </View>
-                                    {touched.phone && errors.phone && (
-                                        <Text style={styles.errorText}>{errors.phone}</Text>
-                                    )}
-                                </FormControl>
+                                <View style={[
+                                    styles.inputContainer,
+                                    touched.phone && errors.phone && styles.inputContainerError
+                                ]}>
+                                    <MaterialIcons
+                                        name="phone"
+                                        size={20}
+                                        color={COLORS.textTertiary}
+                                        style={styles.inputIcon}
+                                    />
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder="08012345678"
+                                        placeholderTextColor={COLORS.textTertiary}
+                                        value={values.phone}
+                                        onChangeText={handleChange('phone')}
+                                        onBlur={handleBlur('phone')}
+                                        keyboardType="phone-pad"
+                                        maxLength={11}
+                                        returnKeyType="done"
+                                    />
+                                </View>
+                                {touched.phone && errors.phone && (
+                                    <Text style={styles.errorText}>{errors.phone}</Text>
+                                )}
                             </View>
 
                             {/* Data Plans */}
@@ -314,16 +453,12 @@ export default function DataScreen() {
                                             {/* Search Bar */}
                                             <View style={styles.searchContainer}>
                                                 <MaterialIcons name="search" size={20} color={COLORS.textTertiary} style={styles.searchIcon} />
-                                                <Input
-                                                    flex={1}
-                                                    variant="unstyled"
+                                                <TextInput
+                                                    style={styles.searchInput}
                                                     placeholder="Search by plan name or price..."
                                                     placeholderTextColor={COLORS.textTertiary}
                                                     value={searchQuery}
                                                     onChangeText={setSearchQuery}
-                                                    fontSize={TYPOGRAPHY.fontSizes.base}
-                                                    color={COLORS.textPrimary}
-                                                    _focus={{ borderWidth: 0 }}
                                                 />
                                                 {searchQuery.length > 0 && (
                                                     <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
@@ -350,6 +485,7 @@ export default function DataScreen() {
                                                                 <View style={styles.loadingContainer}>
                                                                     <MaterialIcons name="error-outline" size={48} color={COLORS.textTertiary} />
                                                                     <Text style={styles.loadingText}>No data plans available</Text>
+                                                                    <Text style={styles.searchHint}>Please try selecting another network</Text>
                                                                 </View>
                                                             );
                                                         }
@@ -387,7 +523,7 @@ export default function DataScreen() {
                                     </View>
                                     <View style={styles.summaryRow}>
                                         <Text style={styles.summaryLabel}>Plan:</Text>
-                                        <Text style={styles.summaryValue}>{selectedPlan.name}</Text>
+                                        <Text style={styles.summaryValue} numberOfLines={2}>{selectedPlan.name}</Text>
                                     </View>
                                     <View style={[styles.summaryRow, styles.summaryTotal]}>
                                         <Text style={styles.summaryTotalLabel}>Total:</Text>
@@ -404,11 +540,11 @@ export default function DataScreen() {
                                     styles.purchaseButton,
                                     (!selectedNetwork || !selectedPlan || !values.phone || isLoading) && styles.purchaseButtonDisabled
                                 ]}
-                                onPress={handleSubmit}
+                                onPress={() => handleSubmit()}
                                 disabled={!selectedNetwork || !selectedPlan || !values.phone || isLoading}
                             >
                                 {isLoading ? (
-                                    <View style={styles.loadingContainer}>
+                                    <View style={styles.loadingButtonContainer}>
                                         <ActivityIndicator size="small" color={COLORS.textInverse} />
                                         <Text style={styles.purchaseButtonText}>Processing...</Text>
                                     </View>
@@ -548,6 +684,14 @@ const styles = StyleSheet.create({
     inputIcon: {
         marginRight: SPACING.md,
     },
+    textInput: {
+        flex: 1,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        paddingVertical: SPACING.sm,
+        paddingHorizontal: 0,
+        textAlignVertical: 'center',
+    },
     errorText: {
         fontSize: TYPOGRAPHY.fontSizes.xs,
         color: COLORS.error,
@@ -563,6 +707,12 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.sm,
         color: COLORS.textSecondary,
         marginTop: SPACING.base,
+        textAlign: 'center',
+    },
+    loadingButtonContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     searchContainer: {
         flexDirection: 'row',
@@ -578,6 +728,14 @@ const styles = StyleSheet.create({
     },
     searchIcon: {
         marginRight: SPACING.sm,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        paddingVertical: SPACING.sm,
+        paddingHorizontal: 0,
+        textAlignVertical: 'center',
     },
     clearButton: {
         padding: SPACING.xs,
@@ -704,17 +862,19 @@ const styles = StyleSheet.create({
     summaryRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: SPACING.sm,
     },
     summaryLabel: {
         fontSize: TYPOGRAPHY.fontSizes.sm,
         color: COLORS.textSecondary,
+        flex: 1,
     },
     summaryValue: {
         fontSize: TYPOGRAPHY.fontSizes.sm,
         fontWeight: TYPOGRAPHY.fontWeights.medium,
         color: COLORS.textPrimary,
-        flex: 1,
+        flex: 2,
         textAlign: 'right',
     },
     summaryTotal: {
@@ -752,5 +912,6 @@ const styles = StyleSheet.create({
         color: COLORS.textInverse,
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        marginLeft: SPACING.sm,
     },
 });
