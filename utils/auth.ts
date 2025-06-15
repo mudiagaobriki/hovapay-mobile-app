@@ -6,6 +6,8 @@ import { persistor } from '@/store';
 
 export const handleLogout = async () => {
     try {
+        // store.dispatch(logout());
+        // await persistor.purge();
         const state = store.getState();
         const userEmail = state.auth.user?.email;
 

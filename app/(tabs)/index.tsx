@@ -96,6 +96,8 @@ export default function DashboardScreen() {
     limit: 5
   });
 
+  // console.log("serviceCategories: ", serviceCategories);
+
   // Get common bill services
   const { data: electricityServices } = useGetServicesByCategoryQuery('electricity-bill');
   const { data: airtimeServices } = useGetServicesByCategoryQuery('airtime');

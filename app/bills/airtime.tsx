@@ -1,4 +1,4 @@
-// app/bills/airtime.tsx - Enhanced Implementation
+// app/bills/airtime.tsx - Fixed Implementation with Pure React Native Inputs
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -10,8 +10,9 @@ import {
   StatusBar,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
-import { Text, Input, FormControl } from 'native-base';
+import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -54,11 +55,15 @@ export default function AirtimeScreen() {
   const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
   const [payBill, { isLoading }] = usePayBillMutation();
 
+  console.log("airtime services: ", airtimeServices);
+
   // Filter and map networks properly
   const networks = airtimeServices?.content?.filter(service => {
     const serviceId = service.serviceID.toLowerCase();
     return ['mtn', 'airtel', 'glo', 'etisalat', '9mobile'].includes(serviceId);
   }) || [];
+
+  console.log("networks: ", networks);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -69,6 +74,21 @@ export default function AirtimeScreen() {
   };
 
   const validatePhoneNumber = (phone: string, network: string) => {
+    // VTPass sandbox test numbers - allow these for any network
+    const testNumbers = [
+      '08011111111', // Successful test
+      '201000000000', // Pending test
+      '500000000000', // Unexpected response test
+      '400000000000', // No response test
+      '300000000000', // Timeout test
+    ];
+
+    // If it's a test number, allow it for any network
+    if (testNumbers.includes(phone)) {
+      return true;
+    }
+
+    // Regular validation for real phone numbers
     const networkPrefixes = {
       'mtn': ['0803', '0806', '0813', '0816', '0903', '0906', '0913', '0916'],
       'airtel': ['0802', '0808', '0812', '0901', '0907', '0911'],
@@ -262,36 +282,31 @@ export default function AirtimeScreen() {
                   {/* Phone Number */}
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Phone Number</Text>
-                    <FormControl isInvalid={touched.phone && errors.phone}>
-                      <View style={[
-                        styles.inputContainer,
-                        touched.phone && errors.phone && styles.inputContainerError
-                      ]}>
-                        <MaterialIcons
-                            name="phone"
-                            size={20}
-                            color={COLORS.textTertiary}
-                            style={styles.inputIcon}
-                        />
-                        <Input
-                            flex={1}
-                            variant="unstyled"
-                            placeholder="08012345678"
-                            placeholderTextColor={COLORS.textTertiary}
-                            value={values.phone}
-                            onChangeText={handleChange('phone')}
-                            onBlur={handleBlur('phone')}
-                            keyboardType="phone-pad"
-                            maxLength={11}
-                            fontSize={TYPOGRAPHY.fontSizes.base}
-                            color={COLORS.textPrimary}
-                            _focus={{ borderWidth: 0 }}
-                        />
-                      </View>
-                      {touched.phone && errors.phone && (
-                          <Text style={styles.errorText}>{errors.phone}</Text>
-                      )}
-                    </FormControl>
+                    <View style={[
+                      styles.inputContainer,
+                      touched.phone && errors.phone && styles.inputContainerError
+                    ]}>
+                      <MaterialIcons
+                          name="phone"
+                          size={20}
+                          color={COLORS.textTertiary}
+                          style={styles.inputIcon}
+                      />
+                      <TextInput
+                          style={styles.textInput}
+                          placeholder="08012345678"
+                          placeholderTextColor={COLORS.textTertiary}
+                          value={values.phone}
+                          onChangeText={handleChange('phone')}
+                          onBlur={handleBlur('phone')}
+                          keyboardType="phone-pad"
+                          maxLength={11}
+                          returnKeyType="next"
+                      />
+                    </View>
+                    {touched.phone && errors.phone && (
+                        <Text style={styles.errorText}>{errors.phone}</Text>
+                    )}
                   </View>
 
                   {/* Quick Amounts */}
@@ -305,33 +320,28 @@ export default function AirtimeScreen() {
                   {/* Custom Amount */}
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Or Enter Amount</Text>
-                    <FormControl isInvalid={touched.amount && errors.amount}>
-                      <View style={[
-                        styles.inputContainer,
-                        touched.amount && errors.amount && styles.inputContainerError
-                      ]}>
-                        <Text style={styles.currencySymbol}>₦</Text>
-                        <Input
-                            flex={1}
-                            variant="unstyled"
-                            placeholder="0"
-                            placeholderTextColor={COLORS.textTertiary}
-                            value={values.amount.toString()}
-                            onChangeText={(text) => {
-                              setFieldValue('amount', text);
-                              setSelectedAmount(null);
-                            }}
-                            onBlur={handleBlur('amount')}
-                            keyboardType="numeric"
-                            fontSize={TYPOGRAPHY.fontSizes.base}
-                            color={COLORS.textPrimary}
-                            _focus={{ borderWidth: 0 }}
-                        />
-                      </View>
-                      {touched.amount && errors.amount && (
-                          <Text style={styles.errorText}>{errors.amount}</Text>
-                      )}
-                    </FormControl>
+                    <View style={[
+                      styles.inputContainer,
+                      touched.amount && errors.amount && styles.inputContainerError
+                    ]}>
+                      <Text style={styles.currencySymbol}>₦</Text>
+                      <TextInput
+                          style={styles.textInput}
+                          placeholder="0"
+                          placeholderTextColor={COLORS.textTertiary}
+                          value={values.amount.toString()}
+                          onChangeText={(text) => {
+                            setFieldValue('amount', text);
+                            setSelectedAmount(null);
+                          }}
+                          onBlur={handleBlur('amount')}
+                          keyboardType="numeric"
+                          returnKeyType="done"
+                      />
+                    </View>
+                    {touched.amount && errors.amount && (
+                        <Text style={styles.errorText}>{errors.amount}</Text>
+                    )}
                   </View>
 
                   {/* Purchase Summary */}
@@ -521,6 +531,14 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     marginRight: SPACING.md,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.textPrimary,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: 0,
+    textAlignVertical: 'center',
   },
   currencySymbol: {
     fontSize: TYPOGRAPHY.fontSizes.base,
