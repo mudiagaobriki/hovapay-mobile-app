@@ -278,6 +278,29 @@ export const billsApi = createApi({
       invalidatesTags: ['Wallet', 'Transactions'],
     }),
 
+    getTransactionStatus: builder.query<{
+      data: {
+        _id: string;
+        user: string;
+        serviceType: string;
+        serviceID: string;
+        billersCode?: string;
+        variation_code?: string;
+        amount: number;
+        phone: string;
+        status: 'pending' | 'completed' | 'failed';
+        transactionRef: string;
+        vtpassRef?: string;
+        responseData?: any;
+        paymentMethod: string;
+        createdAt: string;
+        updatedAt: string;
+      };
+    }, string>({
+      query: (transactionRef) => `/bills/transactions/${transactionRef}`,
+      providesTags: ['Transactions'],
+    }),
+
     getBillHistory: builder.query<{
       transactions: Transaction[];
       pagination: any;
@@ -317,4 +340,5 @@ export const {
   usePayBillMutation,
   useGetBillHistoryQuery,
   useCheckTransactionStatusQuery,
+  useGetTransactionStatusQuery,
 } = billsApi;

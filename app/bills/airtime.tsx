@@ -1,4 +1,4 @@
-// app/bills/airtime.tsx - Fixed Implementation with Pure React Native Inputs
+// app/bills/airtime.tsx - Fixed Implementation with Proper Error Handling
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -138,12 +138,11 @@ export default function AirtimeScreen() {
 
     try {
       // Prepare the payload according to VTPass airtime API specification
-      // For airtime, only request_id, serviceID, amount, and phone are required
       const payload = {
-        request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Generate unique request ID
+        request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         serviceID: selectedNetwork.serviceID,
         amount: Number(values.amount),
-        phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone, // Remove leading 0 for VTPass
+        phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
       };
 
       console.log('Sending airtime purchase request:', payload);
@@ -152,27 +151,80 @@ export default function AirtimeScreen() {
 
       console.log('Airtime purchase result:', result);
 
+      // Check the actual success status from the response
+      const isActuallySuccessful = result.success === true;
+
+      console.log('Transaction status check:', {
+        resultSuccess: result.success,
+        resultMessage: result.message,
+        resultData: result.data,
+        isActuallySuccessful
+      });
+
       // Refetch wallet balance to update UI
       refetchWallet();
 
-      Alert.alert(
-          'Purchase Successful!',
-          `₦${values.amount} ${selectedNetwork.name} airtime has been sent to ${values.phone}`,
-          [
-            {
-              text: 'View Receipt',
-              onPress: () => {
-                // Navigate to transaction details or receipt screen
-                // router.push(`/bills/receipt?ref=${result.reference}`);
+      if (isActuallySuccessful) {
+        // Success
+        Alert.alert(
+            'Purchase Successful!',
+            `₦${values.amount} ${selectedNetwork.name} airtime has been sent to ${values.phone}`,
+            [
+              {
+                text: 'View Receipt',
+                onPress: () => {
+                  router.push({
+                    pathname: '/bills/receipt',
+                    params: {
+                      transactionRef: result.data?.transactionRef || payload.request_id,
+                      type: 'airtime',
+                      network: selectedNetwork.name,
+                      phone: values.phone,
+                      amount: values.amount,
+                      status: 'successful'
+                    }
+                  });
+                }
+              },
+              {
+                text: 'Done',
+                onPress: () => router.back(),
+                style: 'default'
               }
-            },
-            {
-              text: 'Done',
-              onPress: () => router.back(),
-              style: 'default'
-            }
-          ]
-      );
+            ]
+        );
+      } else {
+        // Transaction failed
+        const errorMessage = result.message || result.data?.vtpassResponse?.message || 'Transaction failed. Please try again.';
+
+        Alert.alert(
+            'Transaction Failed',
+            errorMessage,
+            [
+              {
+                text: 'View Details',
+                onPress: () => {
+                  router.push({
+                    pathname: '/bills/receipt',
+                    params: {
+                      transactionRef: result.data?.transactionRef || payload.request_id,
+                      type: 'airtime',
+                      network: selectedNetwork.name,
+                      phone: values.phone,
+                      amount: values.amount,
+                      status: 'failed',
+                      errorMessage: errorMessage
+                    }
+                  });
+                }
+              },
+              {
+                text: 'Try Again',
+                style: 'default'
+              }
+            ]
+        );
+      }
     } catch (error: any) {
       console.error('Airtime purchase error:', error);
 
@@ -184,7 +236,12 @@ export default function AirtimeScreen() {
         errorMessage = error.message;
       }
 
-      Alert.alert('Purchase Failed', errorMessage);
+      Alert.alert('Purchase Failed', errorMessage, [
+        {
+          text: 'OK',
+          style: 'default'
+        }
+      ]);
     }
   };
 
@@ -211,14 +268,17 @@ export default function AirtimeScreen() {
       </TouchableOpacity>
   );
 
-  const renderQuickAmount = (amount: number) => (
+  const renderQuickAmount = (amount: number, setFieldValue: (field: string, value: any) => void) => (
       <TouchableOpacity
           key={amount}
           style={[
             styles.amountCard,
             selectedAmount === amount && styles.amountCardSelected
           ]}
-          onPress={() => setSelectedAmount(amount)}
+          onPress={() => {
+            setSelectedAmount(amount);
+            setFieldValue('amount', amount.toString()); // Set the form field value
+          }}
       >
         <Text style={[
           styles.amountText,
@@ -258,10 +318,9 @@ export default function AirtimeScreen() {
         {/* Main Content */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Formik
-              initialValues={{ phone: '', amount: selectedAmount || '' }}
+              initialValues={{ phone: '', amount: '' }}
               validationSchema={AirtimeSchema}
               onSubmit={handlePurchase}
-              enableReinitialize
           >
             {({ handleChange, handleBlur, handleSubmit, values, errors, touched, setFieldValue }) => (
                 <>
@@ -313,7 +372,7 @@ export default function AirtimeScreen() {
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Quick Amount</Text>
                     <View style={styles.amountsGrid}>
-                      {quickAmounts.map(renderQuickAmount)}
+                      {quickAmounts.map(amount => renderQuickAmount(amount, setFieldValue))}
                     </View>
                   </View>
 
@@ -332,7 +391,10 @@ export default function AirtimeScreen() {
                           value={values.amount.toString()}
                           onChangeText={(text) => {
                             setFieldValue('amount', text);
-                            setSelectedAmount(null);
+                            // Reset selected amount when typing custom amount
+                            if (text && !quickAmounts.includes(Number(text))) {
+                              setSelectedAmount(null);
+                            }
                           }}
                           onBlur={handleBlur('amount')}
                           keyboardType="numeric"
@@ -373,12 +435,7 @@ export default function AirtimeScreen() {
                         styles.purchaseButton,
                         (!selectedNetwork || !values.amount || !values.phone || isLoading) && styles.purchaseButtonDisabled
                       ]}
-                      onPress={() => {
-                        if (selectedAmount && selectedAmount !== Number(values.amount)) {
-                          setFieldValue('amount', selectedAmount);
-                        }
-                        handleSubmit();
-                      }}
+                      onPress={() => handleSubmit()}
                       disabled={!selectedNetwork || !values.amount || !values.phone || isLoading}
                   >
                     {isLoading ? (
