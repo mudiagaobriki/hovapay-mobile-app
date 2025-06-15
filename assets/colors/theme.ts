@@ -1,7 +1,8 @@
 // colors/theme.ts
 export const COLORS = {
     // Primary color - change this to update the entire theme
-    primary: '#3e4f7d',
+    // primary: '#3e4f7d',
+    primary: '#0b3d6f',
 
     // Auto-generated variations of primary color
     get primaryLight() {

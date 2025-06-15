@@ -35,7 +35,7 @@ interface ApiError {
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://192.168.14.122:3040/api', // Your backend URL
+    baseUrl: 'https://hovapay-api.onrender.com/api', // Your backend URL
     prepareHeaders: (headers, { getState }) => {
       // Get the token from the state
       const token = (getState() as RootState).auth.token;

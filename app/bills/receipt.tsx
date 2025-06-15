@@ -1223,8 +1223,8 @@ const styles = StyleSheet.create({
         borderColor: COLORS.primary,
     },
     shareButtonAction: {
-        backgroundColor: COLORS.secondary,
-        ...SHADOWS.colored(COLORS.secondary),
+        backgroundColor: COLORS.primary,
+        ...SHADOWS.colored(COLORS.primary),
     },
     actionButtonText: {
         fontSize: TYPOGRAPHY.fontSizes.base,

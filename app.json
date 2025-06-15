@@ -28,7 +28,8 @@
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
         "READ_MEDIA_AUDIO"
-      ]
+      ],
+      "package": "com.hovapay.app"
     },
     "web": {
       "bundler": "metro",
@@ -49,6 +50,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0a7c6f24-0d10-4bdf-b4d9-8f375aefa487"
+      }
     }
   }
 }

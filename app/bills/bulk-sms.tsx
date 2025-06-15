@@ -1,4 +1,4 @@
-// app/bills/bulk-sms.tsx
+// app/bills/bulk-sms.tsx - Updated with React Native TextInput
 import React, { useState } from 'react';
 import {
     StyleSheet,
@@ -10,8 +10,9 @@ import {
     StatusBar,
     Alert,
     ActivityIndicator,
+    TextInput,
 } from 'react-native';
-import { Text, Input, FormControl, TextArea } from 'native-base';
+import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -31,7 +32,7 @@ const BulkSMSSchema = Yup.object().shape({
         .test('valid-numbers', 'Please enter valid phone numbers', function(value) {
             if (!value) return false;
             const numbers = value.split(/[,\n]/).map(num => num.trim()).filter(num => num);
-            return numbers.every(num => /^[0-9]{11}$/.test(num));
+            return numbers.length > 0 && numbers.every(num => /^[0-9]{11}$/.test(num));
         }),
     message: Yup.string()
         .min(1, 'Message cannot be empty')
@@ -52,7 +53,7 @@ export default function BulkSMSScreen() {
     const [messageLength, setMessageLength] = useState<number>(0);
     const [estimatedCost, setEstimatedCost] = useState<number>(0);
 
-    const { data: walletData } = useGetWalletBalanceQuery();
+    const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const [payBill, { isLoading }] = usePayBillMutation();
 
     const formatCurrency = (amount: number) => {
@@ -85,7 +86,14 @@ export default function BulkSMSScreen() {
         }
 
         if (walletData && cost > walletData.data.balance) {
-            Alert.alert('Insufficient Balance', 'Please fund your wallet to continue');
+            Alert.alert(
+                'Insufficient Balance',
+                `You need ${formatCurrency(cost)} but only have ${formatCurrency(walletData.data.balance)}. Please fund your wallet first.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Fund Wallet', onPress: () => router.push('/wallet/fund') }
+                ]
+            );
             return;
         }
 
@@ -98,24 +106,87 @@ export default function BulkSMSScreen() {
                     text: 'Send SMS',
                     onPress: async () => {
                         try {
-                            // For demo purposes, we'll use the SMSclone service
-                            const result = await payBill({
-                                serviceID: 'smsclone',
+                            // Create the payload for SMS service
+                            const smsPayload = {
+                                serviceID: 'bulk-sms', // This would be your SMS service ID
                                 amount: cost,
-                                phone: '+2348000000000', // Placeholder
-                                // In a real implementation, you'd send the message and recipients
-                                // as additional parameters or use a dedicated SMS API
-                            }).unwrap();
+                                phone: values.recipients, // Send recipients as phone field
+                                billersCode: values.sender || 'Hovapay', // Use sender ID as billersCode
+                                variation_code: 'bulk-sms', // SMS service variation
+                                request_id: `SMS_${Date.now()}`,
+                            };
+
+                            console.log('Sending SMS with payload:', smsPayload);
+
+                            const result = await payBill(smsPayload).unwrap();
+
+                            console.log('SMS API result:', result);
+
+                            // Refetch wallet balance after successful transaction
+                            await refetchWallet();
 
                             Alert.alert(
                                 'SMS Sent Successfully!',
-                                `Your message has been sent to ${recipientCount} recipients`,
-                                [{ text: 'OK', onPress: () => router.back() }]
+                                `Your message has been sent to ${recipientCount} recipients.\n\nTransaction Reference: ${result.data?.transactionRef || 'N/A'}`,
+                                [
+                                    {
+                                        text: 'View Receipt',
+                                        onPress: () => {
+                                            router.push({
+                                                pathname: '/bills/receipt',
+                                                params: {
+                                                    transactionRef: result.data?.transactionRef || `SMS_${Date.now()}`,
+                                                    type: 'bulk-sms',
+                                                    phone: `${recipientCount} recipients`,
+                                                    amount: cost.toString(),
+                                                    status: result.success ? 'successful' : 'failed',
+                                                    serviceName: 'Bulk SMS',
+                                                }
+                                            });
+                                        }
+                                    },
+                                    {
+                                        text: 'View Transactions',
+                                        onPress: () => router.push('/(tabs)/transactions')
+                                    }
+                                ]
                             );
                         } catch (error: any) {
+                            console.error('SMS sending error:', error);
+
+                            let errorMessage = 'Something went wrong. Please try again.';
+
+                            if (error.status) {
+                                switch (error.status) {
+                                    case 400:
+                                        errorMessage = 'Invalid request. Please check your inputs.';
+                                        break;
+                                    case 401:
+                                        errorMessage = 'Authentication failed. Please login again.';
+                                        break;
+                                    case 402:
+                                        errorMessage = 'Insufficient wallet balance.';
+                                        break;
+                                    case 500:
+                                        errorMessage = 'Server error. Please try again later.';
+                                        break;
+                                    default:
+                                        errorMessage = error.data?.message || error.message || errorMessage;
+                                }
+                            } else if (error.message) {
+                                errorMessage = error.message;
+                            }
+
                             Alert.alert(
                                 'SMS Failed',
-                                error.message || 'Something went wrong. Please try again.'
+                                errorMessage,
+                                [
+                                    { text: 'OK' },
+                                    {
+                                        text: 'View Transactions',
+                                        onPress: () => router.push('/(tabs)/transactions')
+                                    }
+                                ]
                             );
                         }
                     }
@@ -124,14 +195,20 @@ export default function BulkSMSScreen() {
         );
     };
 
-    const renderQuickUnit = (units: number) => (
+    const handleQuickUnitSelect = (units: number, setFieldValue: any) => {
+        setSelectedUnits(units);
+        // Don't reset form inputs, just calculate based on selected units
+        // This allows users to use quick purchase without losing their message/recipients
+    };
+
+    const renderQuickUnit = (units: number, setFieldValue: any) => (
         <TouchableOpacity
             key={units}
             style={[
                 styles.unitCard,
                 selectedUnits === units && styles.unitCardSelected
             ]}
-            onPress={() => setSelectedUnits(units)}
+            onPress={() => handleQuickUnitSelect(units, setFieldValue)}
         >
             <Text style={[
                 styles.unitText,
@@ -171,6 +248,13 @@ export default function BulkSMSScreen() {
                     <Text style={styles.balanceAmount}>
                         {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
                     </Text>
+                    <TouchableOpacity
+                        style={styles.fundButton}
+                        onPress={() => router.push('/wallet/fund')}
+                    >
+                        <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
+                        <Text style={styles.fundButtonText}>Add Money</Text>
+                    </TouchableOpacity>
                 </View>
             </LinearGradient>
 
@@ -204,9 +288,12 @@ export default function BulkSMSScreen() {
                                 <Text style={styles.sectionSubtitle}>
                                     Enter phone numbers separated by commas or new lines
                                 </Text>
-                                <FormControl isInvalid={touched.recipients && errors.recipients}>
-                                    <TextArea
-                                        h={20}
+                                <View style={[
+                                    styles.textAreaContainer,
+                                    touched.recipients && errors.recipients && styles.inputContainerError
+                                ]}>
+                                    <TextInput
+                                        style={styles.textArea}
                                         placeholder="08012345678, 08087654321&#10;or one number per line"
                                         placeholderTextColor={COLORS.textTertiary}
                                         value={values.recipients}
@@ -215,56 +302,48 @@ export default function BulkSMSScreen() {
                                             calculateSMSCost(text, values.message);
                                         }}
                                         onBlur={handleBlur('recipients')}
-                                        fontSize={TYPOGRAPHY.fontSizes.base}
-                                        color={COLORS.textPrimary}
-                                        borderColor={COLORS.border}
-                                        backgroundColor={COLORS.backgroundSecondary}
-                                        borderRadius={RADIUS.lg}
-                                        _focus={{ borderColor: COLORS.primary }}
+                                        multiline
+                                        numberOfLines={4}
+                                        textAlignVertical="top"
                                     />
-                                    {touched.recipients && errors.recipients && (
-                                        <Text style={styles.errorText}>{errors.recipients}</Text>
-                                    )}
-                                    {recipientCount > 0 && (
-                                        <Text style={styles.recipientCount}>
-                                            Valid recipients: {recipientCount}
-                                        </Text>
-                                    )}
-                                </FormControl>
+                                </View>
+                                {touched.recipients && errors.recipients && (
+                                    <Text style={styles.errorText}>{errors.recipients}</Text>
+                                )}
+                                {recipientCount > 0 && (
+                                    <Text style={styles.recipientCount}>
+                                        Valid recipients: {recipientCount}
+                                    </Text>
+                                )}
                             </View>
 
                             {/* Sender ID (Optional) */}
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Sender ID (Optional)</Text>
-                                <FormControl isInvalid={touched.sender && errors.sender}>
-                                    <View style={[
-                                        styles.inputContainer,
-                                        touched.sender && errors.sender && styles.inputContainerError
-                                    ]}>
-                                        <MaterialIcons
-                                            name="person"
-                                            size={20}
-                                            color={COLORS.textTertiary}
-                                            style={styles.inputIcon}
-                                        />
-                                        <Input
-                                            flex={1}
-                                            variant="unstyled"
-                                            placeholder="Your Company"
-                                            placeholderTextColor={COLORS.textTertiary}
-                                            value={values.sender}
-                                            onChangeText={handleChange('sender')}
-                                            onBlur={handleBlur('sender')}
-                                            maxLength={11}
-                                            fontSize={TYPOGRAPHY.fontSizes.base}
-                                            color={COLORS.textPrimary}
-                                            _focus={{ borderWidth: 0 }}
-                                        />
-                                    </View>
-                                    {touched.sender && errors.sender && (
-                                        <Text style={styles.errorText}>{errors.sender}</Text>
-                                    )}
-                                </FormControl>
+                                <View style={[
+                                    styles.inputContainer,
+                                    touched.sender && errors.sender && styles.inputContainerError
+                                ]}>
+                                    <MaterialIcons
+                                        name="person"
+                                        size={20}
+                                        color={COLORS.textTertiary}
+                                        style={styles.inputIcon}
+                                    />
+                                    <TextInput
+                                        style={styles.textInput}
+                                        placeholder="Your Company"
+                                        placeholderTextColor={COLORS.textTertiary}
+                                        value={values.sender}
+                                        onChangeText={handleChange('sender')}
+                                        onBlur={handleBlur('sender')}
+                                        maxLength={11}
+                                        returnKeyType="next"
+                                    />
+                                </View>
+                                {touched.sender && errors.sender && (
+                                    <Text style={styles.errorText}>{errors.sender}</Text>
+                                )}
                             </View>
 
                             {/* Message */}
@@ -278,9 +357,12 @@ export default function BulkSMSScreen() {
                                         {messageLength}/160
                                     </Text>
                                 </View>
-                                <FormControl isInvalid={touched.message && errors.message}>
-                                    <TextArea
-                                        h={32}
+                                <View style={[
+                                    styles.textAreaContainer,
+                                    touched.message && errors.message && styles.inputContainerError
+                                ]}>
+                                    <TextInput
+                                        style={[styles.textArea, { height: 120 }]}
                                         placeholder="Type your message here..."
                                         placeholderTextColor={COLORS.textTertiary}
                                         value={values.message}
@@ -290,30 +372,73 @@ export default function BulkSMSScreen() {
                                             calculateSMSCost(values.recipients, text);
                                         }}
                                         onBlur={handleBlur('message')}
-                                        fontSize={TYPOGRAPHY.fontSizes.base}
-                                        color={COLORS.textPrimary}
-                                        borderColor={COLORS.border}
-                                        backgroundColor={COLORS.backgroundSecondary}
-                                        borderRadius={RADIUS.lg}
-                                        _focus={{ borderColor: COLORS.primary }}
+                                        multiline
+                                        numberOfLines={5}
+                                        textAlignVertical="top"
                                     />
-                                    {touched.message && errors.message && (
-                                        <Text style={styles.errorText}>{errors.message}</Text>
-                                    )}
-                                    {messageLength > 160 && (
-                                        <Text style={styles.pageInfo}>
-                                            This message will be sent as {Math.ceil(messageLength / 160)} pages
-                                        </Text>
-                                    )}
-                                </FormControl>
+                                </View>
+                                {touched.message && errors.message && (
+                                    <Text style={styles.errorText}>{errors.message}</Text>
+                                )}
+                                {messageLength > 160 && (
+                                    <Text style={styles.pageInfo}>
+                                        This message will be sent as {Math.ceil(messageLength / 160)} pages
+                                    </Text>
+                                )}
                             </View>
 
                             {/* Quick Units */}
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Quick Purchase (SMS Units)</Text>
+                                <Text style={styles.sectionSubtitle}>
+                                    Select units for quick purchase (doesn't affect your current message)
+                                </Text>
                                 <View style={styles.unitsGrid}>
-                                    {quickUnits.map(renderQuickUnit)}
+                                    {quickUnits.map(units => renderQuickUnit(units, setFieldValue))}
                                 </View>
+                                {selectedUnits && (
+                                    <TouchableOpacity
+                                        style={styles.quickPurchaseButton}
+                                        onPress={() => {
+                                            Alert.alert(
+                                                'Quick Purchase',
+                                                `Purchase ${selectedUnits} SMS units for ${formatCurrency(selectedUnits * SMS_UNIT_PRICE)}?`,
+                                                [
+                                                    { text: 'Cancel', style: 'cancel' },
+                                                    {
+                                                        text: 'Purchase',
+                                                        onPress: async () => {
+                                                            try {
+                                                                const quickPayload = {
+                                                                    serviceID: 'sms-units',
+                                                                    amount: selectedUnits * SMS_UNIT_PRICE,
+                                                                    phone: '08000000000', // Placeholder for units purchase
+                                                                    variation_code: 'sms-units',
+                                                                    request_id: `UNITS_${Date.now()}`,
+                                                                };
+
+                                                                await payBill(quickPayload).unwrap();
+                                                                await refetchWallet();
+                                                                setSelectedUnits(null);
+
+                                                                Alert.alert(
+                                                                    'Purchase Successful!',
+                                                                    `${selectedUnits} SMS units have been added to your account.`
+                                                                );
+                                                            } catch (error: any) {
+                                                                Alert.alert('Purchase Failed', error.message || 'Unable to purchase units');
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            );
+                                        }}
+                                    >
+                                        <Text style={styles.quickPurchaseButtonText}>
+                                            Purchase {selectedUnits} Units - {formatCurrency(selectedUnits * SMS_UNIT_PRICE)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
 
                             {/* Cost Estimate */}
@@ -363,6 +488,8 @@ export default function BulkSMSScreen() {
                                     </Text>
                                 )}
                             </TouchableOpacity>
+
+                            <View style={{ height: SPACING['4xl'] }} />
                         </>
                     )}
                 </Formik>
@@ -413,6 +540,21 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.xl,
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.textInverse,
+        marginBottom: SPACING.sm,
+    },
+    fundButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.withOpacity(COLORS.white, 0.2),
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.xs,
+        borderRadius: RADIUS.base,
+    },
+    fundButtonText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textInverse,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        marginLeft: SPACING.xs,
     },
     content: {
         flex: 1,
@@ -490,8 +632,28 @@ const styles = StyleSheet.create({
         borderColor: COLORS.error,
         backgroundColor: COLORS.withOpacity(COLORS.error, 0.05),
     },
+    textAreaContainer: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        padding: SPACING.base,
+    },
     inputIcon: {
         marginRight: SPACING.md,
+    },
+    textInput: {
+        flex: 1,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        paddingVertical: SPACING.sm,
+        paddingHorizontal: 0,
+    },
+    textArea: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        minHeight: 80,
+        paddingVertical: SPACING.xs,
     },
     errorText: {
         fontSize: TYPOGRAPHY.fontSizes.xs,
@@ -545,6 +707,18 @@ const styles = StyleSheet.create({
     },
     unitPriceSelected: {
         color: COLORS.textInverse,
+    },
+    quickPurchaseButton: {
+        backgroundColor: COLORS.secondary,
+        borderRadius: RADIUS.lg,
+        paddingVertical: SPACING.sm,
+        alignItems: 'center',
+        marginTop: SPACING.base,
+    },
+    quickPurchaseButtonText: {
+        color: COLORS.textInverse,
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
     },
     estimateCard: {
         margin: SPACING.xl,

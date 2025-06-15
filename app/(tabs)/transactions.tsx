@@ -1,4 +1,4 @@
-// app/(tabs)/transactions.tsx - Enhanced with Combined Transaction History
+// app/(tabs)/transactions.tsx - Enhanced with Combined Transaction History (Updated)
 import React, { useState, useMemo } from 'react';
 import {
     StyleSheet,
@@ -20,7 +20,7 @@ import {
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
-type TransactionFilter = 'all' | 'deposit' | 'withdrawal' | 'bill_payment' | 'transfer' | 'virtual_account_credit' | 'refund';
+type TransactionFilter = 'all' | 'deposit' | 'bill_payment' | 'virtual_account_credit' | 'refund';
 
 interface FilterOption {
     id: TransactionFilter;
@@ -34,9 +34,7 @@ const filterOptions: FilterOption[] = [
     { id: 'deposit', label: 'Deposits', icon: 'add-circle', color: COLORS.success },
     { id: 'virtual_account_credit', label: 'Bank Transfer', icon: 'account-balance', color: COLORS.info },
     { id: 'bill_payment', label: 'Bills', icon: 'receipt', color: COLORS.warning },
-    { id: 'transfer', label: 'Transfer', icon: 'send', color: COLORS.primary },
     { id: 'refund', label: 'Refunds', icon: 'keyboard-return', color: COLORS.success },
-    { id: 'withdrawal', label: 'Withdraw', icon: 'remove-circle', color: COLORS.error },
 ];
 
 export default function TransactionsScreen() {
@@ -63,7 +61,7 @@ export default function TransactionsScreen() {
 
     // Combine and process all transactions
     const allTransactions = useMemo(() => {
-        const walletTransactions = walletTransactionData?.transactions || [];
+        const walletTransactions = walletTransactionData?.docs || [];
         const billTransactions = billHistoryData?.docs || [];
 
         console.log('Processing transactions:');
@@ -176,10 +174,6 @@ export default function TransactionsScreen() {
                 if (transaction.status === 'failed') return 'error';
                 if (transaction.status === 'pending') return 'hourglass-empty';
                 return 'receipt';
-            case 'transfer':
-                return 'send';
-            case 'withdrawal':
-                return 'remove-circle';
             case 'refund':
                 return 'keyboard-return';
             default:
@@ -207,10 +201,6 @@ export default function TransactionsScreen() {
             case 'virtual_account_credit':
             case 'refund':
                 return COLORS.success;
-            case 'transfer':
-                return COLORS.primary;
-            case 'withdrawal':
-                return COLORS.error;
             default:
                 return COLORS.textSecondary;
         }
@@ -232,10 +222,6 @@ export default function TransactionsScreen() {
                 return 'Bank Transfer';
             case 'deposit':
                 return 'Wallet Funding';
-            case 'transfer':
-                return 'Money Transfer';
-            case 'withdrawal':
-                return 'Withdrawal';
             case 'refund':
                 return 'Refund';
             default:
@@ -418,7 +404,7 @@ export default function TransactionsScreen() {
                         All Transactions: {allTransactions.length}{'\n'}
                         Filtered: {filteredTransactions.length}{'\n'}
                         Bills: {billHistoryData?.docs?.length || 0}{'\n'}
-                        Wallet: {walletTransactionData?.transactions?.length || 0}
+                        Wallet: {walletTransactionData?.docs?.length || 0}
                     </Text>
                 </View>
             )}
