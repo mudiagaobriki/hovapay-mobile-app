@@ -43,8 +43,8 @@ This app includes a complete authentication system built with Redux Toolkit, Red
 
 ### API Endpoints
 
-- Login: `https://hovapay-api.onrender.com/api/login`
-- Register: `https://hovapay-api.onrender.com/api/register`
+- Login: `http://192.168.0.117:3040/api/login`
+- Register: `http://192.168.0.117:3040/api/register`
 
 ### Redux Store Structure
 

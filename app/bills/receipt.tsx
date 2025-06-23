@@ -293,7 +293,7 @@ Powered by Hovapay
                 font-weight: bold;
                 text-align: center;
                 margin-bottom: 30px;
-                color: #333;
+                color: #0b3d6f;
             }
             .detail-row {
                 display: flex;
@@ -474,47 +474,785 @@ Powered by Hovapay
     `;
     };
 
+    // Replace the existing generatePDFHTML function in your receipt.tsx with this enhanced version
+    const generateProfessionalPDFHTML = () => {
+        // Use the exact primary colors from your theme
+        const primaryColor = '#1F2937'; // COLORS.primary from your theme
+        const primaryGradientStart = '#1F2937';
+        const primaryGradientEnd = '#374151';
+
+        const statusColor = actualStatus === 'completed' || actualStatus === 'successful' ? '#059669' :
+            actualStatus === 'failed' ? '#DC2626' : '#F59E0B';
+
+        const statusBgColor = actualStatus === 'completed' || actualStatus === 'successful' ? '#ECFDF5' :
+            actualStatus === 'failed' ? '#FEF2F2' : '#FFFBEB';
+
+        const statusText = getStatusText(actualStatus);
+        const statusIcon = actualStatus === 'completed' || actualStatus === 'successful' ? '✓' :
+            actualStatus === 'failed' ? '✗' : '⏳';
+
+        const currentDate = new Date().toLocaleString('en-NG', {
+            timeZone: 'Africa/Lagos',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+
+        // Service logo mapping with actual CDN URLs
+        const getServiceLogo = (serviceName) => {
+            const name = serviceName.toLowerCase();
+
+            // Map service names to their actual logo URLs
+            const logoMap = {
+                'mtn': 'https://sandbox.vtpass.com/resources/products/200X200/MTN-Airtime.jpg',
+                'airtel': 'https://sandbox.vtpass.com/resources/products/200X200/Airtel-Airtime.jpg',
+                'glo': 'https://sandbox.vtpass.com/resources/products/200X200/GLO-Airtime.jpg',
+                'etisalat': 'https://sandbox.vtpass.com/resources/products/200X200/9mobile-Airtime.jpg',
+                '9mobile': 'https://sandbox.vtpass.com/resources/products/200X200/9mobile-Airtime.jpg',
+                "foreign-airtime": "https://sandbox.vtpass.com/resources/products/200X200/Foreign-Airtime.jpg",
+
+                // Data services
+                'mtn-data': 'https://sandbox.vtpass.com/resources/products/200X200/MTN-Data.jpg',
+                'airtel-data': 'https://sandbox.vtpass.com/resources/products/200X200/Airtel-Data.jpg',
+                'glo-data': 'https://sandbox.vtpass.com/resources/products/200X200/GLO-Data.jpg',
+                'glo-sme-data': 'https://sandbox.vtpass.com/resources/products/200X200/GLO-Data.jpg',
+                'etisalat-data': 'https://sandbox.vtpass.com/resources/products/200X200/9mobile-Data.jpg',
+                '9mobile-data': 'https://sandbox.vtpass.com/resources/products/200X200/9mobile-Data.jpg',
+                "smile-direct": "https://sandbox.vtpass.com/resources/products/200X200/Smile-Payment.jpg",
+                "spectranet": "https://sandbox.vtpass.com/resources/products/200X200/Spectranet.jpg",
+
+                // TV Subscriptions
+                'dstv': 'https://sandbox.vtpass.com/resources/products/200X200/Pay-DSTV-Subscription.jpg',
+                'gotv': 'https://sandbox.vtpass.com/resources/products/200X200/Gotv-Payment.jpg',
+                'startimes': 'https://sandbox.vtpass.com/resources/products/200X200/Startimes-Subscription.jpg',
+                'showmax': 'https://sandbox.vtpass.com/resources/products/200X200/ShowMax.jpg',
+
+                // Electricity
+                'ikeja-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Ikeja-Electric-Payment-PHCN.jpg',
+                'eko-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Eko-Electric-Payment-PHCN.jpg',
+                'abuja-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Abuja-Electric.jpg',
+                'kano-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Kano-Electric.jpg',
+                'portharcourt-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Port-Harcourt-Electric.jpg',
+                'jos-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Jos-Electric-JED.jpg',
+                'kaduna-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Kaduna-Electric-KAEDCO.jpg',
+                'enugu-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Enugu-Electric-EEDC.jpg',
+                'ibadan-electric': 'https://sandbox.vtpass.com/resources/products/200X200/IBEDC-Ibadan-Electricity-Distribution-Company.jpg',
+                'benin-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Benin-Electricity-BEDC.jpg',
+                'aba-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Aba-Electric-Payment-ABEDC.jpg',
+                'yola-electric': 'https://sandbox.vtpass.com/resources/products/200X200/Yola-Electric-Payment-IKEDC.jpg',
+
+                // Education
+                'waec': 'https://sandbox.vtpass.com/resources/products/200X200/WAEC-Result-Checker-PIN.jpg',
+                'waec-registration': 'https://sandbox.vtpass.com/resources/products/200X200/WAEC-Registration-PIN.jpg',
+                'jamb': 'https://sandbox.vtpass.com/resources/products/200X200/JAMB-PIN-VENDING-(UTME-&-Direct-Entry).jpg',
+
+                // Insurance
+                'ui-insure': "https://sandbox.vtpass.com/resources/products/200X200/Third-Party-Motor-Insurance-Universal-Insurance.jpg",
+
+                // Other Services
+                'sms-clone': 'https://sandbox.vtpass.com/resources/products/200X200/SMSclone.com.jpg',
+            };
+
+            // Try to match the service name to a logo
+            for (const [key, logoUrl] of Object.entries(logoMap)) {
+                if (name.includes(key)) {
+                    return logoUrl;
+                }
+            }
+
+            // Fallback to a generic payment icon if no match found
+            return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMzAiIGZpbGw9IiMxRjI5MzciLz4KPHN2ZyB4PSIxNSIgeT0iMTUiIHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj4KPHA+PHBhdGggZD0iTTIxIDRINGMtMS4xIDAtMiAuOS0yIDJ2NGMwIDEuMS45IDIgMiAyaDE3YzEuMSAwIDItLjkgMi0yVjZjMC0xLjEtLjktMi0yLTJ6IiBmaWxsPSIjRkZGRkZGIi8+CjxwYXRoIGQ9Ik0yMSAxMkg0Yy0xLjEgMC0yIC45LTIgMnY0YzAgMS4xLjkgMiAyIDJoMTdjMS4xIDAgMi0uOSAyLTJWMTRjMC0xLjEtLjktMi0yLTJ6IiBmaWxsPSIjRkZGRkZGIi8+Cjwvc3ZnPgo8L3N2Zz4K';
+        };
+
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hovapay Transaction Receipt</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F9FAFB;
+            color: #111827;
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+        }
+
+        .receipt-container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            background: #FFFFFF;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        /* Full-Width Header with Dual Logos */
+        .header {
+            background: linear-gradient(135deg, ${primaryGradientStart} 0%, ${primaryGradientEnd} 50%, ${primaryGradientStart} 100%);
+            padding: 40px 50px 30px;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.05) 100%);
+            pointer-events: none;
+        }
+
+        .header-logos {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .hovapay-logo {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .hovapay-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: #FFFFFF;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: ${primaryColor};
+            font-size: 18px;
+        }
+
+        .hovapay-logo h1 {
+            font-size: 26px;
+            font-weight: 800;
+            color: #FFFFFF;
+            letter-spacing: -0.5px;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .service-logo-container {
+            background: rgba(255,255,255,0.95);
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* box-shadow: 0 8px 16px rgba(0,0,0,0.15); */ /* Shadow removed as requested */
+            border: 3px solid rgba(255,255,255,0.4);
+            overflow: hidden;
+        }
+
+        .service-logo-container img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+        }
+        
+        .hovapay-logo-img{
+            width: auto;
+            height: 120px;
+            object-fit: contain;
+        }
+
+        .header-content {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .receipt-title {
+            font-size: 20px;
+            color: #0b3d6f;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+
+        .receipt-number {
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 16px;
+            color: #FFFFFF;
+            font-weight: 700;
+            display: inline-block;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* Full-Width Transaction Details Table */
+        .details-section {
+            padding: 80px 50px 50px 50px; /* Increased top padding */
+            width: 100%;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: ${primaryColor};
+            margin-bottom: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, ${primaryColor}, ${primaryColor}80);
+            border-radius: 2px;
+        }
+
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #FFFFFF;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border: 1px solid #E5E7EB;
+        }
+
+        .details-table tr {
+            border-bottom: 1px solid #F3F4F6;
+            transition: background-color 0.2s ease;
+        }
+
+        .details-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .details-table tr:hover {
+            background: rgba(31, 41, 55, 0.02);
+        }
+
+        .details-table td {
+            padding: 20px 30px;
+            vertical-align: middle;
+            font-size: 16px;
+        }
+
+        .details-table td:first-child {
+            font-weight: 600;
+            color: #6B7280;
+            width: 40%;
+            background: #F9FAFB;
+        }
+
+        .details-table td:last-child {
+            font-weight: 700;
+            color: ${primaryColor};
+            text-align: right;
+            background: #FFFFFF;
+        }
+
+        .amount-row {
+            background: linear-gradient(135deg, ${statusColor}08, ${statusColor}03) !important;
+            border-left: 5px solid ${statusColor};
+        }
+
+        .amount-row td {
+            background: transparent !important;
+        }
+
+        .amount-row td:last-child {
+            color: ${statusColor} !important;
+            font-size: 24px !important;
+            font-weight: 800 !important;
+        }
+
+        .status-row td:last-child {
+            color: ${statusColor} !important;
+            font-weight: 800 !important;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .status-check {
+            color: ${statusColor} !important;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .transaction-ref {
+            font-family: 'Monaco', 'Menlo', monospace !important;
+            font-size: 14px !important;
+            background: #F3F4F6;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #D1D5DB;
+            letter-spacing: 0.5px;
+        }
+
+        /* Status Message */
+        .status-message {
+            margin: 40px 50px;
+            padding: 25px 30px;
+            border-radius: 16px;
+            border-left: 5px solid ${statusColor};
+            background: ${statusBgColor};
+            border: 1px solid ${statusColor}30;
+        }
+
+        .status-message h4 {
+            font-size: 18px;
+            font-weight: 700;
+            color: ${statusColor};
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-message p {
+            font-size: 15px;
+            color: #374151;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .refund-notice {
+            background: #ECFDF5;
+            border: 1px solid #10B981;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 16px;
+        }
+
+        .refund-notice p {
+            color: #047857;
+            font-weight: 700;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Enhanced Full-Width Footer */
+        .footer {
+            background: linear-gradient(135deg, ${primaryGradientStart} 0%, ${primaryGradientEnd} 100%);
+            color: #FFFFFF;
+            padding: 50px;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.05) 0%, transparent 50%, rgba(255,255,255,0.02) 100%);
+            pointer-events: none;
+        }
+
+        .footer-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 2;
+            max-width: 100%;
+        }
+
+        .footer-text {
+            flex: 1;
+            max-width: 100%; /* Adjusted for single column layout */
+        }
+
+        .footer-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: #FFFFFF;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            line-height: 1.2;
+        }
+
+        .footer-subtitle {
+            font-size: 16px;
+            color: #D1D5DB;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .footer-support {
+            font-size: 13px;
+            color: #9CA3AF;
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+
+        .footer-support span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* Receipt Meta */
+        .receipt-meta {
+            background: #111827;
+            color: #6B7280;
+            padding: 25px 50px;
+            font-size: 12px;
+            text-align: center;
+            border-top: 1px solid #374151;
+            width: 100%;
+        }
+
+        .meta-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .meta-item {
+            text-align: center;
+        }
+
+        .meta-item strong {
+            display: block;
+            color: #9CA3AF;
+            margin-bottom: 3px;
+            font-weight: 600;
+        }
+
+        .meta-item span {
+            color: #6B7280;
+        }
+
+        /* Security Features */
+        .security-strip {
+            height: 8px;
+            background: linear-gradient(90deg, 
+                ${primaryColor} 0%, 
+                ${statusColor} 25%, 
+                ${primaryColor} 50%, 
+                ${statusColor} 75%, 
+                ${primaryColor} 100%
+            );
+            width: 100%;
+        }
+
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            opacity: 0.02;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .watermark svg {
+            width: 300px;
+            height: 300px;
+        }
+
+        /* Print Styles */
+        @media print {
+            body { 
+                margin: 0; 
+                padding: 0; 
+                background: white; 
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+            }
+            .receipt-container { 
+                box-shadow: none; 
+                margin: 0;
+                width: 100%;
+            }
+            .watermark { display: none; }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header, .details-section, .footer, .status-hero {
+                padding: 30px 25px;
+            }
+            
+            .receipt-meta {
+                padding: 20px 25px;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 25px;
+            }
+            
+            .footer-text {
+                max-width: 100%;
+            }
+            
+            .meta-grid {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .details-table td {
+                padding: 15px 20px;
+                font-size: 14px;
+            }
+            
+            .footer-title {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <div class="security-strip"></div>
+        
+        <div class="watermark">
+            <svg viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="150" cy="150" r="150" fill="${primaryColor}" fill-opacity="0.02"/>
+                <text x="150" y="165" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="${primaryColor}" fill-opacity="0.02" text-anchor="middle">HOVAPAY</text>
+            </svg>
+        </div>
+        
+        <div class="header">
+            <div class="header-logos">
+                <div class="hovapay-logo">
+<img alt="hovapay-logo" src="https://res.cloudinary.com/dwyzq40iu/image/upload/v1749976274/Blue_Hovapay_2_fhdtdy.png"
+                         class="hovapay-logo-img"/>
+                </div>
+                <div class="service-logo-container">
+                    <img src="${getServiceLogo(actualService)}" alt="${actualService}" onerror="this.style.display='none'; this.parentNode.innerHTML='⚡';" />
+                </div>
+            </div>
+            <div class="header-content">
+                <div class="receipt-title">Digital Payment Receipt</div>
+                <div class="receipt-number">
+                    #${params.transactionRef.slice(-8).toUpperCase()}
+                </div>
+            </div>
+        </div>
+
+        <div class="details-section">
+            <div class="section-title">Transaction Summary</div>
+            
+            <table class="details-table">
+                <tr>
+                    <td>Service Provider</td>
+                    <td>${actualService}</td>
+                </tr>
+                
+                <tr>
+                    <td>Service Type</td>
+                    <td>${transaction?.serviceType ? transaction.serviceType.charAt(0).toUpperCase() + transaction.serviceType.slice(1) : 'Digital'} Service</td>
+                </tr>
+                
+                ${actualPhone ? `
+                <tr>
+                    <td>Phone Number</td>
+                    <td>+234${actualPhone.startsWith('0') ? actualPhone.slice(1) : actualPhone}</td>
+                </tr>
+                ` : ''}
+                
+                ${actualBillersCode ? `
+                <tr>
+                    <td>Customer ID</td>
+                    <td><span class="transaction-ref">${actualBillersCode}</span></td>
+                </tr>
+                ` : ''}
+                
+                <tr class="amount-row">
+                    <td>Total Amount</td>
+                    <td>${formatCurrency(actualAmount)}</td>
+                </tr>
+                
+                <tr>
+                    <td>Processing Fee</td>
+                    <td>₦0.00</td>
+                </tr>
+                
+                <tr>
+                    <td>Payment Method</td>
+                    <td>Hovapay Wallet</td>
+                </tr>
+                
+                <tr>
+                    <td>Transaction Reference</td>
+                    <td><span class="transaction-ref">${params.transactionRef}</span></td>
+                </tr>
+                
+                <tr>
+                    <td>Transaction Date</td>
+                    <td>${formatDate(transaction?.createdAt).split(',')[0]}</td>
+                </tr>
+                
+                <tr class="status-row">
+                    <td>Payment Status</td>
+                    <td>
+                        <span class="status-check">${statusIcon}</span>
+                        <span>${statusText}</span>
+                    </td>
+                </tr>
+
+                ${transaction?.vtpassRef ? `
+                <tr>
+                    <td>Provider Reference</td>
+                    <td><span class="transaction-ref">${transaction.vtpassRef}</span></td>
+                </tr>
+                ` : ''}
+            </table>
+        </div>
+
+        <div class="status-message">
+            <h4>
+                <span class="status-check">${statusIcon}</span>
+                ${actualStatus === 'completed' || actualStatus === 'successful'
+            ? 'Payment Completed Successfully'
+            : actualStatus === 'failed'
+                ? 'Payment Failed'
+                : 'Payment Being Processed'}
+            </h4>
+            <p>
+                ${actualStatus === 'completed' || actualStatus === 'successful'
+            ? `Your ${actualService} service has been successfully activated. You should receive a confirmation message from the service provider shortly.`
+            : actualStatus === 'failed'
+                ? `${getErrorMessage()}`
+                : 'Your payment is currently being processed by our secure payment system. This usually takes a few minutes to complete.'}
+            </p>
+            
+            ${actualStatus === 'failed' ? `
+            <div class="refund-notice">
+                <p>
+                    <span class="status-check">✓</span>
+                    <span>Automatic refund of ${formatCurrency(actualAmount)} has been credited to your wallet.</span>
+                </p>
+            </div>
+            ` : ''}
+        </div>
+
+        <div class="footer">
+            <div class="footer-content">
+                <div class="footer-text">
+                    <div class="footer-title">Pay Your Bills with Ease!</div>
+                    <div class="footer-subtitle">
+                        With Hovapay, you can pay for electricity, internet, cable TV, and 
+                        more—instantly and securely from the comfort of your home.
+                    </div>
+                    <div class="footer-support">
+                        <span>📧 support@hovapay.com</span>
+                        <span>📞 +234 800 123 4567</span>
+                        <span>🕒 24/7 Support</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="receipt-meta">
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <strong>Generated</strong>
+                    <span>${currentDate}</span>
+                </div>
+                <div class="meta-item">
+                    <strong>Document ID</strong>
+                    <span>HPR-${new Date().getTime().toString().slice(-8)}</span>
+                </div>
+                <div class="meta-item">
+                    <strong>Version</strong>
+                    <span>4.0.0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+`;
+    };
+
     const handleDownload = async () => {
         try {
             setIsDownloading(true);
 
-            // Generate PDF from HTML
-            const htmlContent = generatePDFHTML();
+            // Generate PDF from HTML using the enhanced professional template
+            const htmlContent = generateProfessionalPDFHTML();
             const { uri } = await printToFileAsync({
                 html: htmlContent,
                 base64: false,
                 margins: {
-                    top: 20,
-                    bottom: 20,
-                    left: 20,
-                    right: 20,
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
                 },
+                width: 595, // A4 width in points
+                height: 842, // A4 height in points
             });
 
             // Generate filename with transaction reference
             const fileName = `Hovapay_Receipt_${params.transactionRef}_${new Date().getTime()}.pdf`;
 
             if (Platform.OS === 'ios') {
-                // iOS: Use sharing directly, as MediaLibrary requires specific asset types
+                // iOS: Use sharing directly
                 if (await Sharing.isAvailableAsync()) {
                     await Sharing.shareAsync(uri, {
                         mimeType: 'application/pdf',
                         dialogTitle: 'Save Receipt',
-                        UTI: 'com.adobe.pdf', // iOS UTI for PDF
+                        UTI: 'com.adobe.pdf',
                     });
 
                     Alert.alert(
                         'Receipt Ready',
-                        'Your receipt is ready to save or share.',
-                        [
-                            { text: 'OK', style: 'default' }
-                        ]
+                        'Your professional receipt is ready to save or share.',
+                        [{ text: 'OK', style: 'default' }]
                     );
                 }
             } else {
-                // Android: Use the corrected MediaLibrary approach
+                // Android: Use MediaLibrary approach
                 try {
-                    // Request media library permissions first
                     const { status } = await MediaLibrary.requestPermissionsAsync();
                     if (status !== 'granted') {
                         Alert.alert(
@@ -525,19 +1263,13 @@ Powered by Hovapay
                         return;
                     }
 
-                    // Create file path in document directory first
                     const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-
-                    // Copy the PDF to the document directory
                     await FileSystem.copyAsync({
                         from: uri,
                         to: fileUri,
                     });
 
-                    // Create asset directly from the generated PDF uri (not the copied one)
                     const asset = await MediaLibrary.createAssetAsync(uri);
-
-                    // Try to get Downloads album, create if it doesn't exist
                     let album = await MediaLibrary.getAlbumAsync('Download');
                     if (album == null) {
                         album = await MediaLibrary.createAlbumAsync('Download', asset, false);
@@ -545,10 +1277,9 @@ Powered by Hovapay
                         await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
                     }
 
-                    // Show success message with options
                     Alert.alert(
                         'Receipt Downloaded',
-                        `Your receipt has been saved to Downloads as ${fileName}`,
+                        `Your professional receipt has been saved to Downloads as ${fileName}`,
                         [
                             {
                                 text: 'Open',
@@ -579,7 +1310,6 @@ Powered by Hovapay
                 } catch (mediaError) {
                     console.log('MediaLibrary failed, falling back to sharing:', mediaError);
 
-                    // Fallback: Just use sharing if MediaLibrary fails
                     if (await Sharing.isAvailableAsync()) {
                         await Sharing.shareAsync(uri, {
                             mimeType: 'application/pdf',
@@ -588,7 +1318,7 @@ Powered by Hovapay
 
                         Alert.alert(
                             'Receipt Ready',
-                            'Your receipt is ready to save or share.',
+                            'Your professional receipt is ready to save or share.',
                             [{ text: 'OK' }]
                         );
                     } else {
@@ -617,8 +1347,7 @@ Powered by Hovapay
                     text: 'Try Share Instead',
                     onPress: async () => {
                         try {
-                            // Fallback to sharing
-                            const htmlContent = generatePDFHTML();
+                            const htmlContent = generateProfessionalPDFHTML();
                             const { uri } = await printToFileAsync({
                                 html: htmlContent,
                                 base64: false,

@@ -37,7 +37,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/th
 const { width } = Dimensions.get('window');
 
 // ⚠️ CRITICAL: Add your actual server URL here
-const SERVER_URL = 'https://hovapay-api.onrender.com'; // Replace with your actual server URL
+const SERVER_URL = 'http://192.168.0.117:3040'; // Replace with your actual server URL
 const FRONTEND_URL = 'http://192.168.14.122:3000'; // Replace with your frontend URL
 
 // Validation schema
