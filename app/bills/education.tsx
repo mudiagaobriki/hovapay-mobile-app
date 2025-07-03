@@ -917,7 +917,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border,
         marginBottom: SPACING.base,
-        ...SHADOWS.sm,
+        // ...SHADOWS.sm,
     },
     categoryCardSelected: {
         borderColor: COLORS.primary,

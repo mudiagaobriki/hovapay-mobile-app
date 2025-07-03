@@ -303,7 +303,7 @@ export default function DataScreen() {
                 style={styles.networkImage}
                 resizeMode="contain"
             />
-            <Text style={styles.networkName}>{network.name.replace(' Data', '')}</Text>
+            <Text style={styles.networkName} numberOfLines={1} ellipsizeMode='tail'>{network.name.replace(' Data', '')}</Text>
             {selectedNetwork?.serviceID === network.serviceID && (
                 <View style={styles.selectedBadge}>
                     <MaterialIcons name="check" size={16} color={COLORS.textInverse} />
@@ -638,7 +638,8 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
         marginBottom: SPACING.base,
         position: 'relative',
-        ...SHADOWS.sm,
+        maxHeight: 100,
+        // ...SHADOWS.sm,
     },
     networkCardSelected: {
         borderColor: COLORS.primary,

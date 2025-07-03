@@ -158,7 +158,7 @@ interface PayBillResponse {
 export const billsApi = createApi({
   reducerPath: 'billsApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'http://192.168.0.117:3040/api',
+    baseUrl: 'https://hovapay-api.onrender.com/api',
     prepareHeaders: (headers, { getState }) => {
       const token = (getState() as RootState).auth.token;
       if (token) {

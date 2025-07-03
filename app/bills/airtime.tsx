@@ -259,7 +259,7 @@ export default function AirtimeScreen() {
             style={styles.networkImage}
             resizeMode="contain"
         />
-        <Text style={styles.networkName}>{network.name.split(' ')[0]}</Text>
+        <Text style={styles.networkName} numberOfLines={1} ellipsizeMode='tail'>{network.name.split(' ')[0]}</Text>
         {selectedNetwork?.serviceID === network.serviceID && (
             <View style={styles.selectedBadge}>
               <MaterialIcons name="check" size={16} color={COLORS.textInverse} />
@@ -543,7 +543,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     marginBottom: SPACING.base,
     position: 'relative',
-    ...SHADOWS.sm,
+    maxHeight: 100,
+    // ...SHADOWS.sm,
   },
   networkCardSelected: {
     borderColor: COLORS.primary,

@@ -421,60 +421,6 @@ export default function DashboardScreen() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        {/* Header with gradient */}
-        <LinearGradient
-            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-            style={styles.header}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.username}>{user?.username || 'User'}</Text>
-              {!user?.verified && (
-                  <Text style={styles.verificationWarning}>⚠️ Please verify your email</Text>
-              )}
-            </View>
-            <TouchableOpacity
-                style={styles.profileButton}
-                onPress={() => router.push('/(tabs)/profile')}
-            >
-              <MaterialIcons name="account-circle" size={32} color={COLORS.textInverse} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Balance Card */}
-          <View style={styles.balanceCard}>
-            <View style={styles.balanceHeader}>
-              <Text style={styles.balanceLabel}>Available Balance</Text>
-              <TouchableOpacity
-                  onPress={() => setBalanceVisible(!balanceVisible)}
-                  style={styles.eyeButton}
-              >
-                <MaterialIcons
-                    name={balanceVisible ? "visibility" : "visibility-off"}
-                    size={20}
-                    color={COLORS.withOpacity(COLORS.textInverse, 0.8)}
-                />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.balanceAmount}>
-              {balanceVisible
-                  ? (walletData?.data ? formatCurrency(walletData.data.balance) : '₦0.00')
-                  : '****'
-              }
-            </Text>
-            <TouchableOpacity
-                style={styles.addMoneyButton}
-                onPress={() => router.push('/wallet/fund')}
-            >
-              <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
-              <Text style={styles.addMoneyText}>Add Money</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-
         {/* Main Content */}
         <ScrollView
             style={styles.content}
@@ -483,6 +429,71 @@ export default function DashboardScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
         >
+        {/* Header with gradient */}
+        {/*<LinearGradient*/}
+        {/*    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}*/}
+        {/*    style={styles.header}*/}
+        {/*    start={{ x: 0, y: 0 }}*/}
+        {/*    end={{ x: 1, y: 1 }}*/}
+        {/*>*/}
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.greeting}>{getGreeting()}</Text>
+                <Text style={styles.username}>{user?.username || 'User'}</Text>
+                {!user?.verified && (
+                    <Text style={styles.verificationWarning}>⚠️ Please verify your email</Text>
+                )}
+              </View>
+              <TouchableOpacity
+                  style={styles.profileButton}
+                  onPress={() => router.push('profile')}
+              >
+                <MaterialIcons name="account-circle" size={32} color={COLORS.textInverse} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Balance Card */}
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceRow}>
+                <View style={styles.balanceInfo}>
+                  <View style={styles.balanceHeader}>
+                    <Text style={styles.balanceLabel}>Available Balance</Text>
+                    <TouchableOpacity
+                        onPress={() => setBalanceVisible(!balanceVisible)}
+                        style={styles.eyeButton}
+                    >
+                      <MaterialIcons
+                          name={balanceVisible ? "visibility" : "visibility-off"}
+                          size={20}
+                          color={COLORS.withOpacity(COLORS.textInverse, 0.8)}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  <Text
+                      style={styles.balanceAmount}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.6}
+                  >
+                    {balanceVisible
+                        ? (walletData?.data ? formatCurrency(walletData.data.balance) : '₦0.00')
+                        : '****'
+                    }
+                  </Text>
+                </View>
+                <TouchableOpacity
+                    style={styles.addMoneyButton}
+                    onPress={() => router.push('/wallet/fund')}
+                >
+                  <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
+                  <Text style={styles.addMoneyText}>Add Money</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        {/*</LinearGradient>*/}
+
           {/* Quick Actions */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -505,93 +516,93 @@ export default function DashboardScreen() {
           </View>
 
           {/* Popular Services */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Popular Services</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/bills')}>
-                <Text style={styles.seeAllText}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.horizontalServicesList}>
-                {/* MTN Services */}
-                {airtimeServices?.content?.filter(service =>
-                    service.serviceID === 'mtn'
-                ).map((service: any) => (
-                    <TouchableOpacity
-                        key={`${service.serviceID}-airtime`}
-                        style={styles.horizontalServiceCard}
-                        onPress={() => router.push('/bills/airtime')}
-                    >
-                      <Image
-                          source={{ uri: service.image }}
-                          style={styles.serviceImage}
-                          resizeMode="contain"
-                      />
-                      <Text style={styles.horizontalServiceName}>MTN</Text>
-                      <Text style={styles.serviceType}>Airtime</Text>
-                    </TouchableOpacity>
-                ))}
+          {/*<View style={styles.section}>*/}
+          {/*  <View style={styles.sectionHeader}>*/}
+          {/*    <Text style={styles.sectionTitle}>Popular Services</Text>*/}
+          {/*    <TouchableOpacity onPress={() => router.push('/(tabs)/bills')}>*/}
+          {/*      <Text style={styles.seeAllText}>View All</Text>*/}
+          {/*    </TouchableOpacity>*/}
+          {/*  </View>*/}
+          {/*  <ScrollView horizontal showsHorizontalScrollIndicator={false}>*/}
+          {/*    <View style={styles.horizontalServicesList}>*/}
+          {/*      /!* MTN Services *!/*/}
+          {/*      {airtimeServices?.content?.filter(service =>*/}
+          {/*          service.serviceID === 'mtn'*/}
+          {/*      ).map((service: any) => (*/}
+          {/*          <TouchableOpacity*/}
+          {/*              key={`${service.serviceID}-airtime`}*/}
+          {/*              style={styles.horizontalServiceCard}*/}
+          {/*              onPress={() => router.push('/bills/airtime')}*/}
+          {/*          >*/}
+          {/*            <Image*/}
+          {/*                source={{ uri: service.image }}*/}
+          {/*                style={styles.serviceImage}*/}
+          {/*                resizeMode="contain"*/}
+          {/*            />*/}
+          {/*            <Text style={styles.horizontalServiceName}>MTN</Text>*/}
+          {/*            <Text style={styles.serviceType}>Airtime</Text>*/}
+          {/*          </TouchableOpacity>*/}
+          {/*      ))}*/}
 
-                {/* MTN Data */}
-                {dataServices?.content?.filter(service =>
-                    service.serviceID === 'mtn-data'
-                ).map((service: any) => (
-                    <TouchableOpacity
-                        key={`${service.serviceID}-data`}
-                        style={styles.horizontalServiceCard}
-                        onPress={() => router.push('/bills/data')}
-                    >
-                      <Image
-                          source={{ uri: service.image }}
-                          style={styles.serviceImage}
-                          resizeMode="contain"
-                      />
-                      <Text style={styles.horizontalServiceName}>MTN</Text>
-                      <Text style={styles.serviceType}>Data</Text>
-                    </TouchableOpacity>
-                ))}
+          {/*      /!* MTN Data *!/*/}
+          {/*      {dataServices?.content?.filter(service =>*/}
+          {/*          service.serviceID === 'mtn-data'*/}
+          {/*      ).map((service: any) => (*/}
+          {/*          <TouchableOpacity*/}
+          {/*              key={`${service.serviceID}-data`}*/}
+          {/*              style={styles.horizontalServiceCard}*/}
+          {/*              onPress={() => router.push('/bills/data')}*/}
+          {/*          >*/}
+          {/*            <Image*/}
+          {/*                source={{ uri: service.image }}*/}
+          {/*                style={styles.serviceImage}*/}
+          {/*                resizeMode="contain"*/}
+          {/*            />*/}
+          {/*            <Text style={styles.horizontalServiceName}>MTN</Text>*/}
+          {/*            <Text style={styles.serviceType}>Data</Text>*/}
+          {/*          </TouchableOpacity>*/}
+          {/*      ))}*/}
 
-                {/* Electricity Services */}
-                {electricityServices?.content?.slice(0, 2).map((service: any) => (
-                    <TouchableOpacity
-                        key={`${service.serviceID}-electric`}
-                        style={styles.horizontalServiceCard}
-                        onPress={() => router.push('/bills/electricity')}
-                    >
-                      <Image
-                          source={{ uri: service.image }}
-                          style={styles.serviceImage}
-                          resizeMode="contain"
-                      />
-                      <Text style={styles.horizontalServiceName}>
-                        {service.name.split(' ')[0]}
-                      </Text>
-                      <Text style={styles.serviceType}>Electric</Text>
-                    </TouchableOpacity>
-                ))}
+          {/*      /!* Electricity Services *!/*/}
+          {/*      {electricityServices?.content?.slice(0, 2).map((service: any) => (*/}
+          {/*          <TouchableOpacity*/}
+          {/*              key={`${service.serviceID}-electric`}*/}
+          {/*              style={styles.horizontalServiceCard}*/}
+          {/*              onPress={() => router.push('/bills/electricity')}*/}
+          {/*          >*/}
+          {/*            <Image*/}
+          {/*                source={{ uri: service.image }}*/}
+          {/*                style={styles.serviceImage}*/}
+          {/*                resizeMode="contain"*/}
+          {/*            />*/}
+          {/*            <Text style={styles.horizontalServiceName}>*/}
+          {/*              {service.name.split(' ')[0]}*/}
+          {/*            </Text>*/}
+          {/*            <Text style={styles.serviceType}>Electric</Text>*/}
+          {/*          </TouchableOpacity>*/}
+          {/*      ))}*/}
 
-                {/* TV Services */}
-                {tvServices?.content?.slice(0, 2).map((service: any) => (
-                    <TouchableOpacity
-                        key={`${service.serviceID}-tv`}
-                        style={styles.horizontalServiceCard}
-                        onPress={() => router.push('/bills/tv-subscription')}
-                    >
-                      <Image
-                          source={{ uri: service.image }}
-                          style={styles.serviceImage}
-                          resizeMode="contain"
-                      />
-                      <Text style={styles.horizontalServiceName}>
-                        {service.name.split(' ')[0]}
-                      </Text>
-                      <Text style={styles.serviceType}>TV</Text>
-                    </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
+          {/*      /!* TV Services *!/*/}
+          {/*      {tvServices?.content?.slice(0, 2).map((service: any) => (*/}
+          {/*          <TouchableOpacity*/}
+          {/*              key={`${service.serviceID}-tv`}*/}
+          {/*              style={styles.horizontalServiceCard}*/}
+          {/*              onPress={() => router.push('/bills/tv-subscription')}*/}
+          {/*          >*/}
+          {/*            <Image*/}
+          {/*                source={{ uri: service.image }}*/}
+          {/*                style={styles.serviceImage}*/}
+          {/*                resizeMode="contain"*/}
+          {/*            />*/}
+          {/*            <Text style={styles.horizontalServiceName}>*/}
+          {/*              {service.name.split(' ')[0]}*/}
+          {/*            </Text>*/}
+          {/*            <Text style={styles.serviceType}>TV</Text>*/}
+          {/*          </TouchableOpacity>*/}
+          {/*      ))}*/}
+          {/*    </View>*/}
+          {/*  </ScrollView>*/}
+          {/*</View>*/}
 
           {/* Recent Transactions */}
           <View style={styles.section}>
@@ -702,6 +713,7 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: TYPOGRAPHY.fontSizes.base,
+    // color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     marginBottom: SPACING.xs,
   },
@@ -721,43 +733,49 @@ const styles = StyleSheet.create({
     padding: SPACING.xs,
   },
   balanceCard: {
-    backgroundColor: COLORS.withOpacity(COLORS.white, 0.15),
-    borderRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    paddingVertical: SPACING['2xl'],
-    backdropFilter: 'blur(10px)',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.base,
+    marginBottom: SPACING.base,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  balanceInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
   },
   balanceHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: SPACING.xs,
   },
   balanceLabel: {
     fontSize: TYPOGRAPHY.fontSizes.sm,
     color: COLORS.withOpacity(COLORS.textInverse, 0.8),
+    marginRight: SPACING.sm,
   },
   eyeButton: {
     padding: SPACING.xs,
   },
   balanceAmount: {
-    fontSize: TYPOGRAPHY.fontSizes['3xl'],
+    fontSize: TYPOGRAPHY.fontSizes['2xl'],
     fontWeight: TYPOGRAPHY.fontWeights.bold,
     color: COLORS.textInverse,
-    marginBottom: SPACING.lg,
-    lineHeight: TYPOGRAPHY.fontSizes['3xl'] * 1.4,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    paddingVertical: SPACING.xs,
+    flexShrink: 1,
+    lineHeight: 24,
   },
   addMoneyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.withOpacity(COLORS.white, 0.2),
-    paddingHorizontal: SPACING.base,
+    backgroundColor: COLORS.withOpacity(COLORS.textInverse, 0.2),
+    borderRadius: RADIUS.md,
     paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.base,
-    alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.base,
+    borderWidth: 1,
+    borderColor: COLORS.withOpacity(COLORS.textInverse, 0.3),
   },
   addMoneyText: {
     fontSize: TYPOGRAPHY.fontSizes.sm,

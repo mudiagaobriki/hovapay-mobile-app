@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
         borderColor: COLORS.border,
         marginRight: SPACING.base,
         position: 'relative',
-        ...SHADOWS.sm,
+        // ...SHADOWS.sm,
     },
     providerCardSelected: {
         borderColor: COLORS.primary,
