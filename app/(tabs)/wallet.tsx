@@ -29,7 +29,7 @@ export default function WalletScreen() {
     const router = useRouter();
     const [refreshing, setRefreshing] = useState(false);
     const [balanceVisible, setBalanceVisible] = useState(true);
-    const [showVirtualAccount, setShowVirtualAccount] = useState(false);
+    const [showVirtualAccount, setShowVirtualAccount] = useState(true);
 
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const { data: transactionData } = useGetTransactionHistoryQuery({
@@ -78,14 +78,6 @@ export default function WalletScreen() {
 
     const walletActions = [
         {
-            id: 'fund',
-            title: 'Add Money',
-            subtitle: 'Fund wallet',
-            icon: 'add',
-            color: COLORS.success,
-            onPress: () => router.push('/wallet/fund'),
-        },
-        {
             id: 'transfer',
             title: 'Transfer',
             subtitle: 'Send money',
@@ -100,6 +92,14 @@ export default function WalletScreen() {
             icon: 'account-balance',
             color: COLORS.warning,
             onPress: () => console.log('Withdraw - Coming soon'),
+        },
+        {
+            id: 'transactions',
+            title: 'History',
+            subtitle: 'View your deposits',
+            icon: 'add',
+            color: COLORS.success,
+            onPress: () => router.push('/(tabs)/transactions'),
         },
     ];
 
@@ -274,7 +274,11 @@ export default function WalletScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
+            <ScrollView
+                style={styles.content}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
             {/* Header */}
             <LinearGradient
                 colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
@@ -292,43 +296,45 @@ export default function WalletScreen() {
 
                 {/* Balance Card */}
                 <View style={styles.balanceCard}>
-                    <View style={styles.balanceHeader}>
-                        <Text style={styles.balanceLabel}>Available Balance</Text>
+                    <View style={styles.balanceRow}>
+                        <View style={styles.balanceInfo}>
+                            <View style={styles.balanceHeader}>
+                                <Text style={styles.balanceLabel}>Available Balance</Text>
+                                <TouchableOpacity
+                                    onPress={() => setBalanceVisible(!balanceVisible)}
+                                    style={styles.eyeButton}
+                                >
+                                    <MaterialIcons
+                                        name={balanceVisible ? "visibility" : "visibility-off"}
+                                        size={20}
+                                        color={COLORS.withOpacity(COLORS.textInverse, 0.8)}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            <Text
+                                style={styles.balanceAmount}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.6}
+                            >
+                                {balanceVisible
+                                    ? (walletData?.data ? formatCurrency(walletData.data.balance) : '₦0.00')
+                                    : '****'
+                                }
+                            </Text>
+                        </View>
                         <TouchableOpacity
-                            onPress={() => setBalanceVisible(!balanceVisible)}
-                            style={styles.eyeButton}
+                            style={styles.addMoneyButton}
+                            onPress={() => router.push('/wallet/fund')}
                         >
-                            <MaterialIcons
-                                name={balanceVisible ? "visibility" : "visibility-off"}
-                                size={20}
-                                color={COLORS.withOpacity(COLORS.textInverse, 0.8)}
-                            />
+                            <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
+                            <Text style={styles.addMoneyText}>Add Money</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.balanceAmount}>
-                        {balanceVisible
-                            ? (walletData?.data ? formatCurrency(walletData.data.balance) : '₦0.00')
-                            : '****'
-                        }
-                    </Text>
-
-                    {/* Primary Fund Button */}
-                    <TouchableOpacity
-                        style={styles.primaryFundButton}
-                        onPress={() => router.push('/wallet/fund')}
-                    >
-                        <MaterialIcons name="add" size={20} color={COLORS.textInverse} />
-                        <Text style={styles.primaryFundButtonText}>Add Money</Text>
-                    </TouchableOpacity>
                 </View>
             </LinearGradient>
 
             {/* Main Content */}
-            <ScrollView
-                style={styles.content}
-                showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            >
                 {/* Virtual Account Card */}
                 {virtualAccountData?.data && (
                     <View style={styles.section}>
@@ -337,24 +343,24 @@ export default function WalletScreen() {
                 )}
 
                 {/* Quick Stats */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Overview</Text>
-                    <View style={styles.statsGrid}>
-                        {quickStats.map((stat, index) => (
-                            <View key={index} style={styles.statCard}>
-                                <Text style={styles.statLabel}>{stat.label}</Text>
-                                <Text style={styles.statValue}>{stat.value}</Text>
-                                <Text style={[
-                                    styles.statChange,
-                                    stat.positive === true && { color: COLORS.success },
-                                    stat.positive === false && { color: COLORS.error },
-                                ]}>
-                                    {stat.change}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
+                {/*<View style={styles.section}>*/}
+                {/*    <Text style={styles.sectionTitle}>Overview</Text>*/}
+                {/*    <View style={styles.statsGrid}>*/}
+                {/*        {quickStats.map((stat, index) => (*/}
+                {/*            <View key={index} style={styles.statCard}>*/}
+                {/*                <Text style={styles.statLabel}>{stat.label}</Text>*/}
+                {/*                <Text style={styles.statValue}>{stat.value}</Text>*/}
+                {/*                <Text style={[*/}
+                {/*                    styles.statChange,*/}
+                {/*                    stat.positive === true && { color: COLORS.success },*/}
+                {/*                    stat.positive === false && { color: COLORS.error },*/}
+                {/*                ]}>*/}
+                {/*                    {stat.change}*/}
+                {/*                </Text>*/}
+                {/*            </View>*/}
+                {/*        ))}*/}
+                {/*    </View>*/}
+                {/*</View>*/}
 
                 {/* Quick Actions */}
                 <View style={styles.section}>
@@ -371,41 +377,41 @@ export default function WalletScreen() {
                                     <MaterialIcons name={action.icon as any} size={24} color={action.color} />
                                 </View>
                                 <Text style={styles.actionTitle}>{action.title}</Text>
-                                <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+                                {/*<Text style={styles.actionSubtitle}>{action.subtitle}</Text>*/}
                             </TouchableOpacity>
                         ))}
                     </View>
                 </View>
 
                 {/* Recent Transactions */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Recent Transactions</Text>
-                        <TouchableOpacity onPress={() => router.push('/(tabs)/transactions')}>
-                            <Text style={styles.seeAllText}>View All</Text>
-                        </TouchableOpacity>
-                    </View>
+                {/*<View style={styles.section}>*/}
+                {/*    <View style={styles.sectionHeader}>*/}
+                {/*        <Text style={styles.sectionTitle}>Recent Transactions</Text>*/}
+                {/*        <TouchableOpacity onPress={() => router.push('/(tabs)/transactions')}>*/}
+                {/*            <Text style={styles.seeAllText}>View All</Text>*/}
+                {/*        </TouchableOpacity>*/}
+                {/*    </View>*/}
 
-                    {transactionData?.transactions?.length ? (
-                        <View style={styles.transactionsList}>
-                            {transactionData.transactions.slice(0, 5).map(renderTransaction)}
-                        </View>
-                    ) : (
-                        <View style={styles.emptyState}>
-                            <MaterialIcons name="receipt-long" size={48} color={COLORS.textTertiary} />
-                            <Text style={styles.emptyStateText}>No transactions yet</Text>
-                            <Text style={styles.emptyStateSubtext}>
-                                Start by funding your wallet or making a payment
-                            </Text>
-                            <TouchableOpacity
-                                style={styles.emptyStateButton}
-                                onPress={() => router.push('/wallet/fund')}
-                            >
-                                <Text style={styles.emptyStateButtonText}>Fund Wallet</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                </View>
+                {/*    {transactionData?.transactions?.length ? (*/}
+                {/*        <View style={styles.transactionsList}>*/}
+                {/*            {transactionData.transactions.slice(0, 5).map(renderTransaction)}*/}
+                {/*        </View>*/}
+                {/*    ) : (*/}
+                {/*        <View style={styles.emptyState}>*/}
+                {/*            <MaterialIcons name="receipt-long" size={48} color={COLORS.textTertiary} />*/}
+                {/*            <Text style={styles.emptyStateText}>No transactions yet</Text>*/}
+                {/*            <Text style={styles.emptyStateSubtext}>*/}
+                {/*                Start by funding your wallet or making a payment*/}
+                {/*            </Text>*/}
+                {/*            <TouchableOpacity*/}
+                {/*                style={styles.emptyStateButton}*/}
+                {/*                onPress={() => router.push('/wallet/fund')}*/}
+                {/*            >*/}
+                {/*                <Text style={styles.emptyStateButtonText}>Fund Wallet</Text>*/}
+                {/*            </TouchableOpacity>*/}
+                {/*        </View>*/}
+                {/*    )}*/}
+                {/*</View>*/}
 
                 <View style={{ height: SPACING['4xl'] }} />
             </ScrollView>
@@ -420,7 +426,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING['3xl'],
+        paddingBottom: SPACING['2xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -443,31 +449,55 @@ const styles = StyleSheet.create({
         color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     },
     balanceCard: {
-        backgroundColor: COLORS.withOpacity(COLORS.white, 0.15),
-        borderRadius: RADIUS.xl,
-        padding: SPACING.xl,
-        paddingVertical: SPACING['2xl'],
-        backdropFilter: 'blur(10px)',
+        backgroundColor: COLORS.primary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.base,
+    },
+    balanceRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    balanceInfo: {
+        flex: 1,
+        marginRight: SPACING.sm,
     },
     balanceHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: SPACING.xs,
     },
     balanceLabel: {
         fontSize: TYPOGRAPHY.fontSizes.sm,
         color: COLORS.withOpacity(COLORS.textInverse, 0.8),
+        marginRight: SPACING.sm,
     },
     eyeButton: {
         padding: SPACING.xs,
     },
     balanceAmount: {
-        fontSize: TYPOGRAPHY.fontSizes['4xl'],
+        fontSize: TYPOGRAPHY.fontSizes['2xl'],
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.textInverse,
-        marginBottom: SPACING.lg,
-        lineHeight: TYPOGRAPHY.fontSizes['4xl'] * 1.2,
+        flexShrink: 1,
+        lineHeight: 24,
+    },
+    addMoneyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.withOpacity(COLORS.textInverse, 0.2),
+        borderRadius: RADIUS.md,
+        paddingVertical: SPACING.sm,
+        paddingHorizontal: SPACING.base,
+        borderWidth: 1,
+        borderColor: COLORS.withOpacity(COLORS.textInverse, 0.3),
+    },
+    addMoneyText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textInverse,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        marginLeft: SPACING.xs,
     },
     primaryFundButton: {
         flexDirection: 'row',
@@ -521,6 +551,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.info + '30',
         ...SHADOWS.sm,
+        marginTop: SPACING.base,
     },
     virtualAccountHeader: {
         flexDirection: 'row',

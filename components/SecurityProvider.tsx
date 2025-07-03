@@ -1,4 +1,4 @@
-// components/SecurityProvider.tsx - Security Provider Component
+// components/SecurityProvider.tsx - Single Fix Security Provider Component
 import React, { useEffect, useRef } from 'react';
 import {
     Alert,
@@ -6,7 +6,6 @@ import {
     AppStateStatus,
     PanResponder,
     View,
-    TouchableWithoutFeedback
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authSecurityManager, initializeSession } from '@/utils/authSecurity';
@@ -44,31 +43,29 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
         }
     }, [isAuthenticated, token]);
 
-    // Create pan responder to detect user activity
+    // Create pan responder that ONLY detects activity without blocking gestures
     useEffect(() => {
         panResponder.current = PanResponder.create({
+            // Don't claim the responder - just detect touches
             onStartShouldSetPanResponder: () => {
                 if (isAuthenticated) {
                     authSecurityManager.extendSession();
                 }
-                return false; // Don't capture the gesture, just detect it
+                return false; // Always return false to not interfere with other gestures
             },
             onMoveShouldSetPanResponder: () => {
                 if (isAuthenticated) {
                     authSecurityManager.extendSession();
                 }
-                return false;
+                return false; // Always return false to not interfere with scrolling
             },
-            onPanResponderGrant: () => {
-                if (isAuthenticated) {
-                    authSecurityManager.extendSession();
-                }
-            },
-            onPanResponderMove: () => {
-                if (isAuthenticated) {
-                    authSecurityManager.extendSession();
-                }
-            },
+            // These won't be called since we're returning false above, but keeping for safety
+            onPanResponderGrant: () => false,
+            onPanResponderMove: () => false,
+            onPanResponderRelease: () => false,
+            onPanResponderTerminate: () => false,
+            // Important: Don't block any gestures
+            onShouldBlockNativeResponder: () => false,
         });
     }, [isAuthenticated]);
 
@@ -111,20 +108,19 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
         );
     };
 
-    // Enhanced children wrapper with activity detection
+    // Fixed wrapper: Only apply PanResponder handlers to the View, not TouchableWithoutFeedback
     return (
-        <TouchableWithoutFeedback
-            onPress={() => {
+        <View
+            style={{ flex: 1 }}
+            {...(panResponder.current?.panHandlers || {})}
+            onTouchStart={() => {
                 if (isAuthenticated) {
                     authSecurityManager.extendSession();
                 }
             }}
-            {...panResponder.current?.panHandlers}
         >
-            <View style={{ flex: 1 }}>
-                {children}
-            </View>
-        </TouchableWithoutFeedback>
+            {children}
+        </View>
     );
 };
 

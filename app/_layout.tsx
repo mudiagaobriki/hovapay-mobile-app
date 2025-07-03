@@ -33,13 +33,13 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
                 switch (lastLogoutReason) {
                     case 'idle_timeout':
-                        message = 'You were logged out due to inactivity for security purposes.';
+                        message = 'You were logged out due to inactivity.';
                         break;
                     case 'token_expired':
                         message = 'Your session has expired. Please log in again.';
                         break;
                     case 'background_timeout':
-                        message = 'You were logged out for security as the app was in background too long.';
+                        message = 'You were logged out as the app was in background too long.';
                         break;
                     case 'max_session_duration':
                         message = 'Your session has reached the maximum duration. Please log in again.';

@@ -897,7 +897,18 @@ export default function ProfileScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollViewContent}
+                showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                keyboardShouldPersistTaps="handled"
+                overScrollMode="always"
+                bounces={true}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                }
+            >
             {/* Header */}
             <LinearGradient
                 colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
@@ -917,23 +928,11 @@ export default function ProfileScreen() {
             </LinearGradient>
 
             {/* Content */}
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollViewContent}
-                showsVerticalScrollIndicator={false}
-                scrollEventThrottle={16}
-                keyboardShouldPersistTaps="handled"
-                overScrollMode="always"
-                bounces={true}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            >
                 {/* Email Verification Banner */}
                 {renderEmailVerificationBanner()}
 
                 {/* Quick Stats */}
-                {renderQuickStats()}
+                {/*{renderQuickStats()}*/}
 
                 {/* Personal Information */}
                 <View style={styles.section}>
@@ -1417,9 +1416,9 @@ const styles = StyleSheet.create({
         zIndex: 2,
     },
     scrollViewContent: {
-        paddingTop: SPACING.xl,
+        // paddingTop: SPACING.xl,
         paddingBottom: SPACING['4xl'],
-        paddingHorizontal: SPACING.xl, // Move horizontal padding here from individual items
+        // paddingHorizontal: SPACING.xl,
     },
     loadingContainer: {
         flex: 1,
@@ -1614,7 +1613,8 @@ const styles = StyleSheet.create({
     },
     section: {
         marginBottom: SPACING.xl,
-        paddingHorizontal: SPACING.sm,
+        paddingHorizontal: SPACING.lg,
+        marginHorizontal: SPACING.xs,
     },
     sectionTitle: {
         fontSize: TYPOGRAPHY.fontSizes.lg,
@@ -1797,8 +1797,8 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
         marginHorizontal: SPACING.xl,
-        marginBottom: SPACING.lg,
-        ...SHADOWS.sm,
+        marginVertical: SPACING.lg,
+        // ...SHADOWS.sm,
     },
     emailBannerContent: {
         flexDirection: 'row',

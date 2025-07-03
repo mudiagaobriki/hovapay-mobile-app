@@ -106,19 +106,19 @@ export default function TabLayout() {
                     ),
                 }}
             />
-            <Tabs.Screen
-                name="bills"
-                options={{
-                    title: 'Bills',
-                    tabBarIcon: ({ color, focused }) => (
-                        <EnhancedTabIcon
-                            name="receipt-long"
-                            focused={focused}
-                            color={color}
-                        />
-                    ),
-                }}
-            />
+            {/*<Tabs.Screen*/}
+            {/*    name="bills"*/}
+            {/*    options={{*/}
+            {/*        title: 'Bills',*/}
+            {/*        tabBarIcon: ({ color, focused }) => (*/}
+            {/*            <EnhancedTabIcon*/}
+            {/*                name="receipt-long"*/}
+            {/*                focused={focused}*/}
+            {/*                color={color}*/}
+            {/*            />*/}
+            {/*        ),*/}
+            {/*    }}*/}
+            {/*/>*/}
             <Tabs.Screen
                 name="wallet"
                 options={{
@@ -145,19 +145,19 @@ export default function TabLayout() {
                     ),
                 }}
             />
-            {/*<Tabs.Screen*/}
-            {/*    name="profile"*/}
-            {/*    options={{*/}
-            {/*        title: 'Profile',*/}
-            {/*        tabBarIcon: ({ color, focused }) => (*/}
-            {/*            <EnhancedTabIcon*/}
-            {/*                name={focused ? "person" : "person-outline"}*/}
-            {/*                focused={focused}*/}
-            {/*                color={color}*/}
-            {/*            />*/}
-            {/*        ),*/}
-            {/*    }}*/}
-            {/*/>*/}
+            <Tabs.Screen
+                name="profile"
+                options={{
+                    title: 'Profile',
+                    tabBarIcon: ({ color, focused }) => (
+                        <EnhancedTabIcon
+                            name={focused ? "person" : "person-outline"}
+                            focused={focused}
+                            color={color}
+                        />
+                    ),
+                }}
+            />
         </Tabs>
     );
 }

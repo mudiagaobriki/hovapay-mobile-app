@@ -292,31 +292,30 @@ export default function AirtimeScreen() {
   return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <LinearGradient
+              colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+              style={styles.header}
+          >
+            <View style={styles.headerContent}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Buy Airtime</Text>
+              <View style={styles.placeholder} />
+            </View>
 
-        {/* Header */}
-        <LinearGradient
-            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-            style={styles.header}
-        >
-          <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Buy Airtime</Text>
-            <View style={styles.placeholder} />
-          </View>
-
-          {/* Balance Card */}
-          <View style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Wallet Balance</Text>
-            <Text style={styles.balanceAmount}>
-              {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
-            </Text>
-          </View>
-        </LinearGradient>
+            {/* Balance Card */}
+            <View style={styles.balanceCard}>
+              <Text style={styles.balanceLabel}>Wallet Balance</Text>
+              <Text style={styles.balanceAmount}>
+                {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
+              </Text>
+            </View>
+          </LinearGradient>
 
         {/* Main Content */}
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <Formik
               initialValues={{ phone: '', amount: '' }}
               validationSchema={AirtimeSchema}
@@ -506,14 +505,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADIUS['2xl'],
     borderTopRightRadius: RADIUS['2xl'],
     marginTop: -SPACING.base,
-    paddingTop: SPACING.xl,
+    paddingTop: SPACING.sm,
   },
   section: {
     paddingHorizontal: SPACING.xl,
-    marginBottom: SPACING.xl,
+    marginTop: SPACING.xl,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizes.lg,
+    fontSize: TYPOGRAPHY.fontSizes.base,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
     color: COLORS.textPrimary,
     marginBottom: SPACING.base,
@@ -539,7 +538,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     padding: SPACING.base,
     alignItems: 'center',
-    borderWidth: 2,
+    // borderWidth: 2,
     borderColor: COLORS.border,
     marginBottom: SPACING.base,
     position: 'relative',
@@ -690,7 +689,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: SPACING.xl,
-    marginBottom: SPACING['2xl'],
+    marginVertical: SPACING['2xl'],
     minHeight: 56,
     ...SHADOWS.colored(COLORS.primary),
   },

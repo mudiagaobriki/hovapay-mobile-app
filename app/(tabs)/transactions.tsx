@@ -427,22 +427,21 @@ export default function TransactionsScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
-            {/* Header */}
-            <LinearGradient
-                colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-                style={styles.header}
-            >
-                <View style={styles.headerContent}>
-                    <Text style={styles.headerTitle}>Transactions</Text>
-                    <Text style={styles.headerSubtitle}>
-                        {hasTransactions ? `${filteredTransactions.length} transactions` : 'Transaction history'}
-                    </Text>
-                </View>
-            </LinearGradient>
-
-            {/* Main Content */}
             <View style={styles.content}>
+            {/* Header */}
+                <LinearGradient
+                    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+                    style={styles.header}
+                >
+                    <View style={styles.headerContent}>
+                        <Text style={styles.headerTitle}>Transactions</Text>
+                        <Text style={styles.headerSubtitle}>
+                            {hasTransactions ? `${filteredTransactions.length} transactions` : 'Transaction history'}
+                        </Text>
+                    </View>
+                </LinearGradient>
+
+                {/* Main Content */}
                 {/* Filter Chips */}
                 <View style={styles.filtersSection}>
                     <ScrollView
@@ -501,10 +500,11 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.backgroundSecondary,
+        // paddingTop: SPACING["2xl"],
     },
     header: {
-        paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingTop: SPACING["4xl"],
+        paddingBottom: SPACING.lg,
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -621,13 +621,13 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     transactionTitle: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontSize: TYPOGRAPHY.fontSizes.sm,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         color: COLORS.textPrimary,
         marginBottom: 2,
     },
     transactionSubtitle: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontSize: TYPOGRAPHY.fontSizes.xs,
         color: COLORS.textSecondary,
         marginBottom: 2,
     },
@@ -639,12 +639,12 @@ const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     transactionAmount: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontSize: TYPOGRAPHY.fontSizes.sm,
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         marginBottom: SPACING.xs,
     },
     statusBadge: {
-        paddingHorizontal: SPACING.sm,
+        paddingHorizontal: SPACING.xs,
         paddingVertical: 2,
         borderRadius: RADIUS.sm,
     },

@@ -144,19 +144,36 @@ export default function DashboardScreen() {
       icon: 'flash-on',
       route: '/bills/electricity',
     },
-    {
-      id: '4',
-      title: 'Send SMS',
-      icon: 'sms',
-      route: '/bills/bulk-sms',
-    },
+    // {
+    //   id: '4',
+    //   title: 'Send SMS',
+    //   icon: 'sms',
+    //   route: '/bills/bulk-sms',
+    // },
   ];
 
+  const getNonMajorServices = (sv) => {
+    let filtered = sv.filter(el => !(el.name.toLowerCase().includes('electric') || el.name.toLowerCase().includes('airtime')
+        || el.name.toLowerCase().includes('data') || el.name.toLowerCase().includes('other')));
+    filtered = filtered.map (el => {
+      if (el.name.includes('TV Subscription')) {
+        return {
+          ...el,
+          name: 'TV/Cable'
+        }
+      }
+      else{
+        return el
+      }
+    })
+    return filtered;
+  }
+
   // Enhanced service categories with Bulk SMS
-  const enhancedServiceCategories = [
+  const enhancedServiceCategories = getNonMajorServices([
     ...(serviceCategories?.content || []),
     { identifier: 'bulk-sms', name: 'Bulk SMS' }
-  ];
+  ]);
 
   // Combine and sort transactions - Corrected based on actual API response
   const getAllTransactions = () => {
@@ -429,14 +446,14 @@ export default function DashboardScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
         >
-        {/* Header with gradient */}
-        {/*<LinearGradient*/}
-        {/*    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}*/}
-        {/*    style={styles.header}*/}
-        {/*    start={{ x: 0, y: 0 }}*/}
-        {/*    end={{ x: 1, y: 1 }}*/}
-        {/*>*/}
-          <View style={styles.header}>
+         {/*Header with gradient*/}
+        <LinearGradient
+            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+            style={styles.header}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+        >
+        {/*  <View style={styles.header}>*/}
             <View style={styles.headerContent}>
               <View style={styles.headerLeft}>
                 <Text style={styles.greeting}>{getGreeting()}</Text>
@@ -491,12 +508,12 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        {/*</LinearGradient>*/}
+          {/*</View>*/}
+        </LinearGradient>
 
           {/* Quick Actions */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            {/*<Text style={styles.sectionTitle}>Quick Actions</Text>*/}
             <View style={styles.quickActionsGrid}>
               {quickActions.map(renderQuickAction)}
             </View>
@@ -504,12 +521,12 @@ export default function DashboardScreen() {
 
           {/* Service Categories */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Bill Services</Text>
-              <TouchableOpacity onPress={() => router.push('/(tabs)/bills')}>
-                <Text style={styles.seeAllText}>See All</Text>
-              </TouchableOpacity>
-            </View>
+            {/*<View style={styles.sectionHeader}>*/}
+            {/*  <Text style={styles.sectionTitle}>Bill Services</Text>*/}
+            {/*  <TouchableOpacity onPress={() => router.push('/(tabs)/bills')}>*/}
+            {/*    <Text style={styles.seeAllText}>See All</Text>*/}
+            {/*  </TouchableOpacity>*/}
+            {/*</View>*/}
             <View style={styles.servicesGrid}>
               {enhancedServiceCategories.slice(0, 8).map(renderServiceCategory)}
             </View>
@@ -629,15 +646,15 @@ export default function DashboardScreen() {
                 if (allTransactions.length > 0) {
                   return (
                       <>
-                        {allTransactions.slice(0, 5).map(renderTransaction)}
+                        {allTransactions.slice(0, 3).map(renderTransaction)}
                         {/* Show total count if there are more transactions */}
-                        {allTransactions.length > 5 && (
-                            <View style={styles.moreTransactionsIndicator}>
-                              <Text style={styles.moreTransactionsText}>
-                                +{allTransactions.length - 5} more transactions
-                              </Text>
-                            </View>
-                        )}
+                        {/*{allTransactions.length > 3 && (*/}
+                        {/*    <View style={styles.moreTransactionsIndicator}>*/}
+                        {/*      <Text style={styles.moreTransactionsText}>*/}
+                        {/*        +{allTransactions.length - 3} more transactions*/}
+                        {/*      </Text>*/}
+                        {/*    </View>*/}
+                        {/*)}*/}
                       </>
                   );
                 } else {
@@ -699,7 +716,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: SPACING.base,
-    paddingBottom: SPACING['3xl'],
+    paddingBottom: SPACING['2xl'],
     paddingHorizontal: SPACING.xl,
   },
   headerContent: {
@@ -713,8 +730,8 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: TYPOGRAPHY.fontSizes.base,
-    // color: COLORS.withOpacity(COLORS.textInverse, 0.8),
     color: COLORS.withOpacity(COLORS.textInverse, 0.8),
+    // color: COLORS.primary,
     marginBottom: SPACING.xs,
   },
   username: {
@@ -802,26 +819,31 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.base,
   },
   sectionTitle: {
-    fontSize: TYPOGRAPHY.fontSizes.lg,
+    fontSize: TYPOGRAPHY.fontSizes.sm,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
     color: COLORS.textPrimary,
   },
   seeAllText: {
-    fontSize: TYPOGRAPHY.fontSizes.sm,
+    fontSize: TYPOGRAPHY.fontSizes.xs,
     color: COLORS.primary,
     fontWeight: TYPOGRAPHY.fontWeights.medium,
   },
   quickActionsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: SPACING.xl,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm,
+    ...SHADOWS.sm,
   },
   quickActionCard: {
     backgroundColor: COLORS.background,
     borderRadius: RADIUS.lg,
     padding: SPACING.sm,
     alignItems: 'center',
-    width: (width - SPACING.xl * 2 - SPACING.base * 3) / 4,
-    ...SHADOWS.sm,
+    width: (width - SPACING.xl * 2 - SPACING.base * 3) / 3,
+    // ...SHADOWS.sm,
   },
   quickActionIcon: {
     width: 36,
@@ -843,15 +865,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.sm,
+    ...SHADOWS.sm,
   },
   serviceCard: {
     backgroundColor: COLORS.background,
     borderRadius: RADIUS.lg,
-    padding: SPACING.sm,
+    // padding: SPACING.sm,
     alignItems: 'center',
     width: (width - SPACING.xl * 2 - SPACING.base * 3) / 4,
-    marginBottom: SPACING.base,
-    ...SHADOWS.sm,
+    marginVertical: SPACING.base,
+    // ...SHADOWS.sm,
   },
   serviceIcon: {
     width: 40,
@@ -867,6 +893,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: TYPOGRAPHY.fontWeights.medium,
     lineHeight: TYPOGRAPHY.fontSizes.xs * 1.2,
+    // wordBreak: 'normal',
+    // flexWrap: 'wrap',
   },
   horizontalServicesList: {
     flexDirection: 'row',
@@ -909,7 +937,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: SPACING.md,
+    paddingBottom: SPACING.lg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
@@ -919,8 +947,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionIcon: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: RADIUS.base,
     backgroundColor: COLORS.primaryBackground,
     justifyContent: 'center',
@@ -931,7 +959,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   transactionService: {
-    fontSize: TYPOGRAPHY.fontSizes.sm,
+    fontSize: TYPOGRAPHY.fontSizes.xs + 1,
     fontWeight: TYPOGRAPHY.fontWeights.medium,
     color: COLORS.textPrimary,
     marginBottom: 2,
@@ -944,13 +972,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   transactionAmount: {
-    fontSize: TYPOGRAPHY.fontSizes.sm,
+    fontSize: TYPOGRAPHY.fontSizes.xs + 1,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
     color: COLORS.textPrimary,
     marginBottom: SPACING.xs,
   },
   statusBadge: {
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: RADIUS.sm,
   },

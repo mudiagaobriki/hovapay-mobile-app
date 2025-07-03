@@ -508,31 +508,30 @@ export default function TVSubscriptionScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
-            {/* Header */}
-            <LinearGradient
-                colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-                style={styles.header}
-            >
-                <View style={styles.headerContent}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>TV Subscription</Text>
-                    <View style={styles.placeholder} />
-                </View>
-
-                {/* Balance Card */}
-                <View style={styles.balanceCard}>
-                    <Text style={styles.balanceLabel}>Wallet Balance</Text>
-                    <Text style={styles.balanceAmount}>
-                        {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
-                    </Text>
-                </View>
-            </LinearGradient>
-
-            {/* Main Content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <LinearGradient
+                    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+                    style={styles.header}
+                >
+                    <View style={styles.headerContent}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>TV Subscription</Text>
+                        <View style={styles.placeholder} />
+                    </View>
+
+                    {/* Balance Card */}
+                    <View style={styles.balanceCard}>
+                        <Text style={styles.balanceLabel}>Wallet Balance</Text>
+                        <Text style={styles.balanceAmount}>
+                            {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
+                        </Text>
+                    </View>
+                </LinearGradient>
+
+                {/* Main Content */}
                 <Formik
                     initialValues={{ smartCardNumber: '', phone: '' }}
                     validationSchema={TVSubscriptionSchema}
@@ -569,7 +568,7 @@ export default function TVSubscriptionScreen() {
                                             />
                                             <TextInput
                                                 style={styles.textInput}
-                                                placeholder="Enter smart card number"
+                                                placeholder="Enter smart card no"
                                                 placeholderTextColor={COLORS.textTertiary}
                                                 value={values.smartCardNumber}
                                                 onChangeText={(text) => {
@@ -883,14 +882,14 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: RADIUS['2xl'],
         borderTopRightRadius: RADIUS['2xl'],
         marginTop: -SPACING.base,
-        paddingTop: SPACING.xl,
+        paddingTop: SPACING.sm,
     },
     section: {
         paddingHorizontal: SPACING.xl,
-        marginBottom: SPACING.xl,
+        marginTop: SPACING.xl,
     },
     sectionTitle: {
-        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         color: COLORS.textPrimary,
         marginBottom: SPACING.base,
@@ -900,12 +899,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: SPACING.base,
     },
     providerCard: {
-        width: 120,
+        width: 110,
         backgroundColor: COLORS.background,
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
         alignItems: 'center',
-        borderWidth: 2,
+        // borderWidth: 2,
         borderColor: COLORS.border,
         marginRight: SPACING.base,
         position: 'relative',
@@ -928,7 +927,7 @@ const styles = StyleSheet.create({
     },
     selectedBadge: {
         position: 'absolute',
-        top: -8,
+        top: 0,
         right: -8,
         backgroundColor: COLORS.primary,
         borderRadius: RADIUS.full,
@@ -1244,7 +1243,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginHorizontal: SPACING.xl,
-        marginBottom: SPACING['2xl'],
+        marginVertical: SPACING['2xl'],
         minHeight: 56,
         ...SHADOWS.colored(COLORS.primary),
     },

@@ -346,31 +346,30 @@ export default function DataScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
-            {/* Header */}
-            <LinearGradient
-                colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-                style={styles.header}
-            >
-                <View style={styles.headerContent}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Buy Data</Text>
-                    <View style={styles.placeholder} />
-                </View>
-
-                {/* Balance Card */}
-                <View style={styles.balanceCard}>
-                    <Text style={styles.balanceLabel}>Wallet Balance</Text>
-                    <Text style={styles.balanceAmount}>
-                        {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
-                    </Text>
-                </View>
-            </LinearGradient>
-
-            {/* Main Content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <LinearGradient
+                    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+                    style={styles.header}
+                >
+                    <View style={styles.headerContent}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Buy Data</Text>
+                        <View style={styles.placeholder} />
+                    </View>
+
+                    {/* Balance Card */}
+                    <View style={styles.balanceCard}>
+                        <Text style={styles.balanceLabel}>Wallet Balance</Text>
+                        <Text style={styles.balanceAmount}>
+                            {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
+                        </Text>
+                    </View>
+                </LinearGradient>
+
+                {/* Main Content */}
                 <Formik
                     initialValues={{ phone: '' }}
                     validationSchema={DataSchema}
@@ -611,14 +610,14 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: RADIUS['2xl'],
         borderTopRightRadius: RADIUS['2xl'],
         marginTop: -SPACING.base,
-        paddingTop: SPACING.xl,
+        paddingTop: SPACING.sm,
     },
     section: {
         paddingHorizontal: SPACING.xl,
-        marginBottom: SPACING.xl,
+        marginTop: SPACING.xl,
     },
     sectionTitle: {
-        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         color: COLORS.textPrimary,
         marginBottom: SPACING.base,
@@ -634,7 +633,7 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
         alignItems: 'center',
-        borderWidth: 2,
+        // borderWidth: 2,
         borderColor: COLORS.border,
         marginBottom: SPACING.base,
         position: 'relative',
@@ -779,7 +778,7 @@ const styles = StyleSheet.create({
         padding: SPACING.base,
         borderWidth: 1,
         borderColor: COLORS.success + '40',
-        ...SHADOWS.sm,
+        // ...SHADOWS.sm,
     },
     selectedPlanHeader: {
         flexDirection: 'row',
@@ -798,13 +797,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     selectedPlanName: {
-        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         color: COLORS.textPrimary,
         flex: 1,
     },
     selectedPlanPrice: {
-        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontSize: TYPOGRAPHY.fontSizes.lg,
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.success,
     },
@@ -901,7 +900,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginHorizontal: SPACING.xl,
-        marginBottom: SPACING['2xl'],
+        marginVertical: SPACING['2xl'],
         minHeight: 56,
         ...SHADOWS.colored(COLORS.primary),
     },
