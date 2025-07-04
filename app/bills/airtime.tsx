@@ -10,7 +10,7 @@ import {
   StatusBar,
   Image,
   Alert,
-  TextInput,
+  TextInput, Modal,
 } from 'react-native';
 import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -24,6 +24,11 @@ import {
   useGetWalletBalanceQuery
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+import * as LocalAuthentication from 'expo-local-authentication';
+import {
+  useGetUserProfileQuery,
+  useVerifyTransactionPinMutation
+} from '@/store/api/profileApi';
 
 const { width } = Dimensions.get('window');
 
@@ -51,11 +56,20 @@ export default function AirtimeScreen() {
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkService | null>(null);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
 
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [securityType, setSecurityType] = useState<'pin' | 'biometric' | null>(null);
+  const [enteredPin, setEnteredPin] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pendingTransaction, setPendingTransaction] = useState<any>(null);
+
   const { data: airtimeServices, isLoading: servicesLoading } = useGetServicesByCategoryQuery('airtime');
   const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
   const [payBill, { isLoading }] = usePayBillMutation();
 
-  console.log("airtime services: ", airtimeServices);
+  const { data: userProfile } = useGetUserProfileQuery();
+  const [verifyPin] = useVerifyTransactionPinMutation();
+
+  // console.log("airtime services: ", airtimeServices);
 
   // Filter and map networks properly
   const networks = airtimeServices?.content?.filter(service => {
@@ -63,7 +77,7 @@ export default function AirtimeScreen() {
     return ['mtn', 'airtel', 'glo', 'etisalat', '9mobile'].includes(serviceId);
   }) || [];
 
-  console.log("networks: ", networks);
+  // console.log("networks: ", networks);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -103,6 +117,112 @@ export default function AirtimeScreen() {
     return validPrefixes.includes(prefix);
   };
 
+  const checkSecuritySetup = () => {
+    const hasPin = userProfile?.data?.pin; // Pin exists in database
+    const hasBiometric = userProfile?.data?.biometricTransactions; // Biometric enabled for transactions
+
+    return {
+      hasPin: !!hasPin,
+      hasBiometric: !!hasBiometric,
+      hasAnySecurity: !!hasPin || !!hasBiometric,
+      canUseBiometric: !!hasBiometric && userProfile?.data?.biometricType !== 'none'
+    };
+  };
+
+  const promptForSecurity = async (transactionData: any) => {
+    const security = checkSecuritySetup();
+
+    if (!security.hasAnySecurity) {
+      // No security method enabled - redirect to profile
+      Alert.alert(
+          'Security Setup Required',
+          'To make transactions, you need to set up either a transaction PIN or enable biometric authentication.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Setup Security',
+              onPress: () => router.push('/(tabs)/profile'),
+            }
+          ]
+      );
+      return false;
+    }
+
+    setPendingTransaction(transactionData);
+
+    // If both are available, prefer biometric
+    if (security.canUseBiometric) {
+      return await attemptBiometricAuth();
+    } else if (security.hasPin) {
+      setSecurityType('pin');
+      setShowSecurityModal(true);
+      return false; // Will continue after PIN verification
+    }
+
+    return false;
+  };
+
+  const attemptBiometricAuth = async () => {
+    try {
+      const biometricAuth = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Confirm your transaction',
+        subtitle: 'Use your biometric to authorize this payment',
+        cancelLabel: 'Cancel',
+        fallbackLabel: 'Use PIN'
+      });
+
+      if (biometricAuth.success) {
+        return true;
+      } else if (biometricAuth.error === 'UserCancel') {
+        return false;
+      } else {
+        // Biometric failed, try PIN if available
+        const security = checkSecuritySetup();
+        if (security.hasPin) {
+          setSecurityType('pin');
+          setShowSecurityModal(true);
+        } else {
+          Alert.alert('Authentication Failed', 'Biometric authentication failed and no PIN is set up.');
+        }
+        return false;
+      }
+    } catch (error) {
+      console.error('Biometric authentication error:', error);
+      const security = checkSecuritySetup();
+      if (security.hasPin) {
+        setSecurityType('pin');
+        setShowSecurityModal(true);
+      } else {
+        Alert.alert('Error', 'Biometric authentication is not available and no PIN is set up.');
+      }
+      return false;
+    }
+  };
+
+  const verifyTransactionPin = async () => {
+    if (!enteredPin || enteredPin.length !== 4) {
+      setPinError('Please enter a 4-digit PIN');
+      return false;
+    }
+
+    try {
+      const result = await verifyPin({ pin: enteredPin }).unwrap();
+
+      if (result.status === 'success') {
+        setShowSecurityModal(false);
+        setEnteredPin('');
+        setPinError('');
+        return true;
+      } else {
+        setPinError('Incorrect PIN. Please try again.');
+        return false;
+      }
+    } catch (error: any) {
+      setPinError(error.data?.message || 'PIN verification failed');
+      return false;
+    }
+  };
+
   const handlePurchase = async (values: any) => {
     if (!selectedNetwork) {
       Alert.alert('Error', 'Please select a network');
@@ -136,39 +256,83 @@ export default function AirtimeScreen() {
       return;
     }
 
+    // Prepare transaction data
+    const transactionData = {
+      request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      serviceID: selectedNetwork.serviceID,
+      amount: Number(values.amount),
+      phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
+      formValues: values // Store form values for later use
+    };
+
+    // Check security setup and handle accordingly
+    const security = checkSecuritySetup();
+
+    if (!security.hasAnySecurity) {
+      // No security method enabled - redirect to profile
+      Alert.alert(
+          'Security Setup Required',
+          'To make transactions, you need to set up either a transaction PIN or enable biometric authentication.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Setup Security',
+              onPress: () => router.push('/(tabs)/profile'),
+            }
+          ]
+      );
+      return;
+    }
+
+    // Store pending transaction
+    setPendingTransaction(transactionData);
+
+    // Try biometric first if available
+    if (security.canUseBiometric) {
+      const biometricSuccess = await attemptBiometricAuth();
+      if (biometricSuccess) {
+        await processPurchase(transactionData);
+      }
+    } else if (security.hasPin) {
+      // Show PIN modal
+      setSecurityType('pin');
+      setShowSecurityModal(true);
+    }
+  };
+
+  const processPurchase = async (transactionData: any) => {
     try {
-      // Prepare the payload according to VTPass airtime API specification
+      // console.log('Sending airtime purchase request:', transactionData);
+
+      // Create the payload for the API
       const payload = {
-        request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        serviceID: selectedNetwork.serviceID,
-        amount: Number(values.amount),
-        phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
+        request_id: transactionData.request_id,
+        serviceID: transactionData.serviceID,
+        amount: transactionData.amount,
+        phone: transactionData.phone,
       };
 
-      console.log('Sending airtime purchase request:', payload);
+      console.log("Here-----------------")
 
       const result = await payBill(payload).unwrap();
-
       console.log('Airtime purchase result:', result);
 
-      // Check the actual success status from the response
       const isActuallySuccessful = result.success === true;
-
-      console.log('Transaction status check:', {
-        resultSuccess: result.success,
-        resultMessage: result.message,
-        resultData: result.data,
-        isActuallySuccessful
-      });
 
       // Refetch wallet balance to update UI
       refetchWallet();
+
+      // Get form values for display
+      const formValues = transactionData.formValues || {
+        phone: `0${transactionData.phone}`,
+        amount: transactionData.amount
+      };
 
       if (isActuallySuccessful) {
         // Success
         Alert.alert(
             'Purchase Successful!',
-            `₦${values.amount} ${selectedNetwork.name} airtime has been sent to ${values.phone}`,
+            `₦${formValues.amount} ${selectedNetwork.name} airtime has been sent to ${formValues.phone}`,
             [
               {
                 text: 'View Receipt',
@@ -179,8 +343,8 @@ export default function AirtimeScreen() {
                       transactionRef: result.data?.transactionRef || payload.request_id,
                       type: 'airtime',
                       network: selectedNetwork.name,
-                      phone: values.phone,
-                      amount: values.amount,
+                      phone: formValues.phone,
+                      amount: formValues.amount,
                       status: 'successful'
                     }
                   });
@@ -210,8 +374,8 @@ export default function AirtimeScreen() {
                       transactionRef: result.data?.transactionRef || payload.request_id,
                       type: 'airtime',
                       network: selectedNetwork.name,
-                      phone: values.phone,
-                      amount: values.amount,
+                      phone: formValues.phone,
+                      amount: formValues.amount,
                       status: 'failed',
                       errorMessage: errorMessage
                     }
@@ -244,6 +408,148 @@ export default function AirtimeScreen() {
       ]);
     }
   };
+
+  // const handlePurchase = async (values: any) => {
+  //   if (!selectedNetwork) {
+  //     Alert.alert('Error', 'Please select a network');
+  //     return;
+  //   }
+  //
+  //   // Validate phone number against selected network
+  //   if (!validatePhoneNumber(values.phone, selectedNetwork.serviceID)) {
+  //     Alert.alert(
+  //         'Invalid Phone Number',
+  //         `The phone number ${values.phone} does not match the selected ${selectedNetwork.name} network. Please check and try again.`
+  //     );
+  //     return;
+  //   }
+  //
+  //   // Check wallet balance
+  //   if (walletData && values.amount > walletData.data.balance) {
+  //     const shortfall = values.amount - walletData.data.balance;
+  //     Alert.alert(
+  //         'Insufficient Balance',
+  //         `You need ${formatCurrency(shortfall)} more to complete this transaction.`,
+  //         [
+  //           { text: 'Cancel', style: 'cancel' },
+  //           {
+  //             text: 'Fund Wallet',
+  //             onPress: () => router.push('/(tabs)/wallet'),
+  //             style: 'default'
+  //           }
+  //         ]
+  //     );
+  //     return;
+  //   }
+  //
+  //   try {
+  //     // Prepare the payload according to VTPass airtime API specification
+  //     const payload = {
+  //       request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  //       serviceID: selectedNetwork.serviceID,
+  //       amount: Number(values.amount),
+  //       phone: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
+  //     };
+  //
+  //     console.log('Sending airtime purchase request:', payload);
+  //
+  //     const result = await payBill(payload).unwrap();
+  //
+  //     console.log('Airtime purchase result:', result);
+  //
+  //     // Check the actual success status from the response
+  //     const isActuallySuccessful = result.success === true;
+  //
+  //     console.log('Transaction status check:', {
+  //       resultSuccess: result.success,
+  //       resultMessage: result.message,
+  //       resultData: result.data,
+  //       isActuallySuccessful
+  //     });
+  //
+  //     // Refetch wallet balance to update UI
+  //     refetchWallet();
+  //
+  //     if (isActuallySuccessful) {
+  //       // Success
+  //       Alert.alert(
+  //           'Purchase Successful!',
+  //           `₦${values.amount} ${selectedNetwork.name} airtime has been sent to ${values.phone}`,
+  //           [
+  //             {
+  //               text: 'View Receipt',
+  //               onPress: () => {
+  //                 router.push({
+  //                   pathname: '/bills/receipt',
+  //                   params: {
+  //                     transactionRef: result.data?.transactionRef || payload.request_id,
+  //                     type: 'airtime',
+  //                     network: selectedNetwork.name,
+  //                     phone: values.phone,
+  //                     amount: values.amount,
+  //                     status: 'successful'
+  //                   }
+  //                 });
+  //               }
+  //             },
+  //             {
+  //               text: 'Done',
+  //               onPress: () => router.back(),
+  //               style: 'default'
+  //             }
+  //           ]
+  //       );
+  //     } else {
+  //       // Transaction failed
+  //       const errorMessage = result.message || result.data?.vtpassResponse?.message || 'Transaction failed. Please try again.';
+  //
+  //       Alert.alert(
+  //           'Transaction Failed',
+  //           errorMessage,
+  //           [
+  //             {
+  //               text: 'View Details',
+  //               onPress: () => {
+  //                 router.push({
+  //                   pathname: '/bills/receipt',
+  //                   params: {
+  //                     transactionRef: result.data?.transactionRef || payload.request_id,
+  //                     type: 'airtime',
+  //                     network: selectedNetwork.name,
+  //                     phone: values.phone,
+  //                     amount: values.amount,
+  //                     status: 'failed',
+  //                     errorMessage: errorMessage
+  //                   }
+  //                 });
+  //               }
+  //             },
+  //             {
+  //               text: 'Try Again',
+  //               style: 'default'
+  //             }
+  //           ]
+  //       );
+  //     }
+  //   } catch (error: any) {
+  //     console.error('Airtime purchase error:', error);
+  //
+  //     let errorMessage = 'Something went wrong. Please try again.';
+  //
+  //     if (error.data?.message) {
+  //       errorMessage = error.data.message;
+  //     } else if (error.message) {
+  //       errorMessage = error.message;
+  //     }
+  //
+  //     Alert.alert('Purchase Failed', errorMessage, [
+  //       {
+  //         text: 'OK',
+  //         style: 'default'
+  //       }
+  //     ]);
+  //   }
+  // };
 
   const renderNetwork = (network: NetworkService) => (
       <TouchableOpacity
@@ -287,6 +593,99 @@ export default function AirtimeScreen() {
           {formatCurrency(amount)}
         </Text>
       </TouchableOpacity>
+  );
+
+  const SecurityModal = () => (
+      <Modal
+          visible={showSecurityModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowSecurityModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Confirm Transaction</Text>
+              <TouchableOpacity
+                  onPress={() => {
+                    setShowSecurityModal(false);
+                    setEnteredPin('');
+                    setPinError('');
+                  }}
+                  style={styles.modalCloseButton}
+              >
+                <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.transactionSummary}>
+              <Text style={styles.summaryText}>
+                {selectedNetwork?.name} Airtime
+              </Text>
+              <Text style={styles.summaryAmount}>
+                {pendingTransaction ? formatCurrency(pendingTransaction.amount) : ''}
+              </Text>
+              <Text style={styles.summaryPhone}>
+                {pendingTransaction ? `0${pendingTransaction.phone}` : ''}
+              </Text>
+            </View>
+
+            <View style={styles.pinSection}>
+              <Text style={styles.pinLabel}>Enter Transaction PIN</Text>
+              <View style={styles.pinInputContainer}>
+                <TextInput
+                    style={styles.pinInput}
+                    value={enteredPin}
+                    onChangeText={(text) => {
+                      setEnteredPin(text.replace(/[^0-9]/g, '').slice(0, 4));
+                      setPinError('');
+                    }}
+                    keyboardType="numeric"
+                    maxLength={4}
+                    secureTextEntry
+                    placeholder="••••"
+                    placeholderTextColor={COLORS.textTertiary}
+                />
+              </View>
+              {pinError ? (
+                  <Text style={styles.pinError}>{pinError}</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setShowSecurityModal(false);
+                    setEnteredPin('');
+                    setPinError('');
+                  }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                  style={[
+                    styles.confirmButton,
+                    enteredPin.length !== 4 && styles.confirmButtonDisabled
+                  ]}
+                  onPress={async () => {
+                    const verified = await verifyTransactionPin();
+                    if (verified && pendingTransaction) {
+                      setShowSecurityModal(false);
+                      setEnteredPin('');
+                      setPinError('');
+                      await processPurchase(pendingTransaction);
+                    }
+                  }}
+                  disabled={enteredPin.length !== 4}
+              >
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
   );
 
   return (
@@ -452,6 +851,7 @@ export default function AirtimeScreen() {
             )}
           </Formik>
         </ScrollView>
+        <SecurityModal />
       </SafeAreaView>
   );
 }
@@ -701,5 +1101,123 @@ const styles = StyleSheet.create({
     color: COLORS.textInverse,
     fontSize: TYPOGRAPHY.fontSizes.base,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  modalContent: {
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
+    width: '100%',
+    maxWidth: 400,
+    ...SHADOWS.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  modalTitle: {
+    fontSize: TYPOGRAPHY.fontSizes.lg,
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    color: COLORS.textPrimary,
+  },
+  modalCloseButton: {
+    padding: SPACING.xs,
+  },
+  transactionSummary: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.base,
+    marginBottom: SPACING.xl,
+    alignItems: 'center',
+  },
+  summaryText: {
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  summaryAmount: {
+    fontSize: TYPOGRAPHY.fontSizes.xl,
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    color: COLORS.primary,
+    marginBottom: SPACING.xs,
+  },
+  summaryPhone: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    color: COLORS.textPrimary,
+  },
+  pinSection: {
+    marginBottom: SPACING.xl,
+  },
+  pinLabel: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.base,
+    textAlign: 'center',
+  },
+  pinInputContainer: {
+    alignItems: 'center',
+  },
+  pinInput: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    paddingVertical: SPACING.base,
+    paddingHorizontal: SPACING.xl,
+    fontSize: TYPOGRAPHY.fontSizes.xl,
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: COLORS.textPrimary,
+    width: 120,
+  },
+  pinError: {
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    color: COLORS.error,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: SPACING.base,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    fontWeight: TYPOGRAPHY.fontWeights.medium,
+    color: COLORS.textSecondary,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmButtonDisabled: {
+    backgroundColor: COLORS.textTertiary,
+    opacity: 0.6,
+  },
+  confirmButtonText: {
+    fontSize: TYPOGRAPHY.fontSizes.base,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
+    color: COLORS.textInverse,
   },
 });

@@ -26,6 +26,12 @@ import {
     useGetWalletBalanceQuery
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+import * as LocalAuthentication from 'expo-local-authentication';
+import {
+    useGetUserProfileQuery,
+    useVerifyTransactionPinMutation
+} from '@/store/api/profileApi';
+import { Modal } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +61,12 @@ export default function DataScreen() {
     const [selectedPlan, setSelectedPlan] = useState<DataPlan | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [showSecurityModal, setShowSecurityModal] = useState(false);
+    const [securityType, setSecurityType] = useState<'pin' | 'biometric' | null>(null);
+    const [enteredPin, setEnteredPin] = useState('');
+    const [pinError, setPinError] = useState('');
+    const [pendingTransaction, setPendingTransaction] = useState<any>(null);
+
     const { data: dataServices } = useGetServicesByCategoryQuery('data');
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const { data: variations, isLoading: variationsLoading, error: variationsError } = useGetServiceVariationsQuery(
@@ -63,6 +75,9 @@ export default function DataScreen() {
     );
 
     const [payBill, { isLoading }] = usePayBillMutation();
+
+    const { data: userProfile } = useGetUserProfileQuery();
+    const [verifyPin] = useVerifyTransactionPinMutation();
 
     // Debug log to see the variations structure
     React.useEffect(() => {
@@ -134,6 +149,79 @@ export default function DataScreen() {
         });
     };
 
+    const checkSecuritySetup = () => {
+        const hasPin = userProfile?.data?.pin; // Pin exists in database
+        const hasBiometric = userProfile?.data?.biometricTransactions; // Biometric enabled for transactions
+
+        return {
+            hasPin: !!hasPin,
+            hasBiometric: !!hasBiometric,
+            hasAnySecurity: !!hasPin || !!hasBiometric,
+            canUseBiometric: !!hasBiometric && userProfile?.data?.biometricType !== 'none'
+        };
+    };
+
+    const attemptBiometricAuth = async () => {
+        try {
+            const biometricAuth = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Confirm your transaction',
+                subtitle: 'Use your biometric to authorize this payment',
+                cancelLabel: 'Cancel',
+                fallbackLabel: 'Use PIN'
+            });
+
+            if (biometricAuth.success) {
+                return true;
+            } else if (biometricAuth.error === 'UserCancel') {
+                return false;
+            } else {
+                // Biometric failed, try PIN if available
+                const security = checkSecuritySetup();
+                if (security.hasPin) {
+                    setSecurityType('pin');
+                    setShowSecurityModal(true);
+                } else {
+                    Alert.alert('Authentication Failed', 'Biometric authentication failed and no PIN is set up.');
+                }
+                return false;
+            }
+        } catch (error) {
+            console.error('Biometric authentication error:', error);
+            const security = checkSecuritySetup();
+            if (security.hasPin) {
+                setSecurityType('pin');
+                setShowSecurityModal(true);
+            } else {
+                Alert.alert('Error', 'Biometric authentication is not available and no PIN is set up.');
+            }
+            return false;
+        }
+    };
+
+    const verifyTransactionPin = async () => {
+        if (!enteredPin || enteredPin.length !== 4) {
+            setPinError('Please enter a 4-digit PIN');
+            return false;
+        }
+
+        try {
+            const result = await verifyPin({ pin: enteredPin }).unwrap();
+
+            if (result.status === 'success') {
+                setShowSecurityModal(false);
+                setEnteredPin('');
+                setPinError('');
+                return true;
+            } else {
+                setPinError('Incorrect PIN. Please try again.');
+                return false;
+            }
+        } catch (error: any) {
+            setPinError(error.data?.message || 'PIN verification failed');
+            return false;
+        }
+    };
+
     const handlePurchase = async (values: any) => {
         if (!selectedNetwork) {
             Alert.alert('Error', 'Please select a network');
@@ -172,32 +260,71 @@ export default function DataScreen() {
             return;
         }
 
+        // Prepare transaction data
+        const transactionData = {
+            request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            serviceID: selectedNetwork.serviceID,
+            billersCode: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
+            variation_code: selectedPlan.variation_code,
+            amount: selectedPlan.variation_amount,
+            phone: values.phone,
+            formValues: values,
+            planName: selectedPlan.name
+        };
+
+        // Check security setup and handle accordingly
+        const security = checkSecuritySetup();
+
+        if (!security.hasAnySecurity) {
+            // No security method enabled - redirect to profile
+            Alert.alert(
+                'Security Setup Required',
+                'To make transactions, you need to set up either a transaction PIN or enable biometric authentication.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Setup Security',
+                        onPress: () => router.push('/(tabs)/profile'),
+                    }
+                ]
+            );
+            return;
+        }
+
+        // Store pending transaction
+        setPendingTransaction(transactionData);
+
+        // Try biometric first if available
+        if (security.canUseBiometric) {
+            const biometricSuccess = await attemptBiometricAuth();
+            if (biometricSuccess) {
+                await processPurchase(transactionData);
+            }
+        } else if (security.hasPin) {
+            // Show PIN modal
+            setSecurityType('pin');
+            setShowSecurityModal(true);
+        }
+    };
+
+    const processPurchase = async (transactionData: any) => {
         try {
-            // Prepare the payload according to VTPass data API specification
+            console.log('Sending data purchase request:', transactionData);
+
+            // Create the payload for the API
             const payload = {
-                request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                serviceID: selectedNetwork.serviceID,
-                billersCode: values.phone.startsWith('0') ? values.phone.substring(1) : values.phone,
-                variation_code: selectedPlan.variation_code,
-                amount: selectedPlan.variation_amount,
-                phone: values.phone,
+                request_id: transactionData.request_id,
+                serviceID: transactionData.serviceID,
+                billersCode: transactionData.billersCode,
+                variation_code: transactionData.variation_code,
+                amount: transactionData.amount,
+                phone: transactionData.phone,
             };
 
-            console.log('Sending data purchase request:', payload);
-
             const result = await payBill(payload).unwrap();
-
             console.log('Data purchase result:', result);
 
-            // Check the actual success status from the response
             const isActuallySuccessful = result.success === true;
-
-            console.log('Transaction status check:', {
-                resultSuccess: result.success,
-                resultMessage: result.message,
-                resultData: result.data,
-                isActuallySuccessful
-            });
 
             // Refetch wallet balance to update UI
             refetchWallet();
@@ -206,7 +333,7 @@ export default function DataScreen() {
                 // Success
                 Alert.alert(
                     'Purchase Successful!',
-                    `${selectedPlan.name} has been activated on ${values.phone}`,
+                    `${transactionData.planName} has been activated on ${transactionData.phone}`,
                     [
                         {
                             text: 'View Receipt',
@@ -217,10 +344,10 @@ export default function DataScreen() {
                                         transactionRef: result.data?.transactionRef || payload.request_id,
                                         type: 'data',
                                         network: selectedNetwork.name.replace(' Data', ''),
-                                        phone: values.phone,
-                                        amount: selectedPlan.variation_amount.toString(),
+                                        phone: transactionData.phone,
+                                        amount: transactionData.amount.toString(),
                                         status: 'successful',
-                                        serviceName: selectedPlan.name
+                                        serviceName: transactionData.planName
                                     }
                                 });
                             }
@@ -249,11 +376,11 @@ export default function DataScreen() {
                                         transactionRef: result.data?.transactionRef || payload.request_id,
                                         type: 'data',
                                         network: selectedNetwork.name.replace(' Data', ''),
-                                        phone: values.phone,
-                                        amount: selectedPlan.variation_amount.toString(),
+                                        phone: transactionData.phone,
+                                        amount: transactionData.amount.toString(),
                                         status: 'failed',
                                         errorMessage: errorMessage,
-                                        serviceName: selectedPlan.name
+                                        serviceName: transactionData.planName
                                     }
                                 });
                             }
@@ -312,9 +439,20 @@ export default function DataScreen() {
         </TouchableOpacity>
     );
 
+    function generateRandomCode(length = 8) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+
+        return result;
+    }
+
     const renderDataPlan = (plan: DataPlan) => (
         <TouchableOpacity
-            key={plan.variation_code}
+            key={plan.variation_code + generateRandomCode(10)}
             style={[
                 styles.planCard,
                 selectedPlan?.variation_code === plan.variation_code && styles.planCardSelected
@@ -341,6 +479,99 @@ export default function DataScreen() {
                 )}
             </View>
         </TouchableOpacity>
+    );
+
+    const SecurityModal = () => (
+        <Modal
+            visible={showSecurityModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowSecurityModal(false)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Confirm Transaction</Text>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setShowSecurityModal(false);
+                                setEnteredPin('');
+                                setPinError('');
+                            }}
+                            style={styles.modalCloseButton}
+                        >
+                            <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.transactionSummary}>
+                        <Text style={styles.summaryText}>
+                            {selectedNetwork?.name.replace(' Data', '')} Data
+                        </Text>
+                        <Text style={styles.summaryAmount}>
+                            {pendingTransaction ? formatCurrency(pendingTransaction.amount) : ''}
+                        </Text>
+                        <Text style={styles.summaryPhone}>
+                            {pendingTransaction ? pendingTransaction.phone : ''}
+                        </Text>
+                        <Text style={styles.summaryPlan}>
+                            {pendingTransaction ? pendingTransaction.planName : ''}
+                        </Text>
+                    </View>
+
+                    <View style={styles.pinSection}>
+                        <Text style={styles.pinLabel}>Enter Transaction PIN</Text>
+                        <View style={styles.pinInputContainer}>
+                            <TextInput
+                                style={styles.pinInput}
+                                value={enteredPin}
+                                onChangeText={(text) => {
+                                    setEnteredPin(text.replace(/[^0-9]/g, '').slice(0, 4));
+                                    setPinError('');
+                                }}
+                                keyboardType="numeric"
+                                maxLength={4}
+                                secureTextEntry
+                                placeholder="••••"
+                                placeholderTextColor={COLORS.textTertiary}
+                            />
+                        </View>
+                        {pinError ? (
+                            <Text style={styles.pinError}>{pinError}</Text>
+                        ) : null}
+                    </View>
+
+                    <View style={styles.modalActions}>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => {
+                                setShowSecurityModal(false);
+                                setEnteredPin('');
+                                setPinError('');
+                            }}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.confirmButton,
+                                enteredPin.length !== 4 && styles.confirmButtonDisabled
+                            ]}
+                            onPress={async () => {
+                                const verified = await verifyTransactionPin();
+                                if (verified && pendingTransaction) {
+                                    await processPurchase(pendingTransaction);
+                                }
+                            }}
+                            disabled={enteredPin.length !== 4}
+                        >
+                            <Text style={styles.confirmButtonText}>Confirm</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
     );
 
     return (
@@ -557,6 +788,7 @@ export default function DataScreen() {
                     )}
                 </Formik>
             </ScrollView>
+            <SecurityModal />
         </SafeAreaView>
     );
 }
@@ -914,4 +1146,130 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SPACING.xl,
+    },
+    modalContent: {
+        backgroundColor: COLORS.background,
+        borderRadius: RADIUS.xl,
+        padding: SPACING.xl,
+        width: '100%',
+        maxWidth: 400,
+        ...SHADOWS.lg,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.xl,
+    },
+    modalTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        color: COLORS.textPrimary,
+    },
+    modalCloseButton: {
+        padding: SPACING.xs,
+    },
+    transactionSummary: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.xl,
+        alignItems: 'center',
+    },
+    summaryText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        marginBottom: SPACING.xs,
+    },
+    summaryAmount: {
+        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        color: COLORS.primary,
+        marginBottom: SPACING.xs,
+    },
+    summaryPhone: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    summaryPlan: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        fontStyle: 'italic',
+    },
+    pinSection: {
+        marginBottom: SPACING.xl,
+    },
+    pinLabel: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.base,
+        textAlign: 'center',
+    },
+    pinInputContainer: {
+        alignItems: 'center',
+    },
+    pinInput: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        borderColor: COLORS.border,
+        paddingVertical: SPACING.base,
+        paddingHorizontal: SPACING.xl,
+        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        textAlign: 'center',
+        letterSpacing: 8,
+        color: COLORS.textPrimary,
+        width: 120,
+    },
+    pinError: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.error,
+        textAlign: 'center',
+        marginTop: SPACING.sm,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: SPACING.base,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        paddingVertical: SPACING.base,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelButtonText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textSecondary,
+    },
+    confirmButton: {
+        flex: 1,
+        backgroundColor: COLORS.primary,
+        borderRadius: RADIUS.lg,
+        paddingVertical: SPACING.base,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmButtonDisabled: {
+        backgroundColor: COLORS.textTertiary,
+        opacity: 0.6,
+    },
+    confirmButtonText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textInverse,
+    },
+
 });

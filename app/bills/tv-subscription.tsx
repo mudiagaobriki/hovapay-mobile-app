@@ -27,6 +27,12 @@ import {
     useGetWalletBalanceQuery
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
+import * as LocalAuthentication from 'expo-local-authentication';
+import {
+    useGetUserProfileQuery,
+    useVerifyTransactionPinMutation
+} from '@/store/api/profileApi';
+import { Modal } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +82,12 @@ export default function TVSubscriptionScreen() {
     const [isVerifying, setIsVerifying] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
+    const [showSecurityModal, setShowSecurityModal] = useState(false);
+    const [securityType, setSecurityType] = useState<'pin' | 'biometric' | null>(null);
+    const [enteredPin, setEnteredPin] = useState('');
+    const [pinError, setPinError] = useState('');
+    const [pendingTransaction, setPendingTransaction] = useState<any>(null);
+
     const { data: tvServices } = useGetServicesByCategoryQuery('tv-subscription');
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const { data: packages, isLoading: packagesLoading } = useGetServiceVariationsQuery(
@@ -84,6 +96,9 @@ export default function TVSubscriptionScreen() {
     );
     const [verifyCustomer] = useVerifyCustomerMutation();
     const [payBill, { isLoading }] = usePayBillMutation();
+
+    const { data: userProfile } = useGetUserProfileQuery();
+    const [verifyPin] = useVerifyTransactionPinMutation();
 
     const providers = tvServices?.content || [];
 
@@ -108,6 +123,79 @@ export default function TVSubscriptionScreen() {
 
             return nameMatch || priceMatch;
         });
+    };
+
+    const checkSecuritySetup = () => {
+        const hasPin = userProfile?.data?.pin; // Pin exists in database
+        const hasBiometric = userProfile?.data?.biometricTransactions; // Biometric enabled for transactions
+
+        return {
+            hasPin: !!hasPin,
+            hasBiometric: !!hasBiometric,
+            hasAnySecurity: !!hasPin || !!hasBiometric,
+            canUseBiometric: !!hasBiometric && userProfile?.data?.biometricType !== 'none'
+        };
+    };
+
+    const attemptBiometricAuth = async () => {
+        try {
+            const biometricAuth = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Confirm your transaction',
+                subtitle: 'Use your biometric to authorize this payment',
+                cancelLabel: 'Cancel',
+                fallbackLabel: 'Use PIN'
+            });
+
+            if (biometricAuth.success) {
+                return true;
+            } else if (biometricAuth.error === 'UserCancel') {
+                return false;
+            } else {
+                // Biometric failed, try PIN if available
+                const security = checkSecuritySetup();
+                if (security.hasPin) {
+                    setSecurityType('pin');
+                    setShowSecurityModal(true);
+                } else {
+                    Alert.alert('Authentication Failed', 'Biometric authentication failed and no PIN is set up.');
+                }
+                return false;
+            }
+        } catch (error) {
+            console.error('Biometric authentication error:', error);
+            const security = checkSecuritySetup();
+            if (security.hasPin) {
+                setSecurityType('pin');
+                setShowSecurityModal(true);
+            } else {
+                Alert.alert('Error', 'Biometric authentication is not available and no PIN is set up.');
+            }
+            return false;
+        }
+    };
+
+    const verifyTransactionPin = async () => {
+        if (!enteredPin || enteredPin.length !== 4) {
+            setPinError('Please enter a 4-digit PIN');
+            return false;
+        }
+
+        try {
+            const result = await verifyPin({ pin: enteredPin }).unwrap();
+
+            if (result.status === 'success') {
+                setShowSecurityModal(false);
+                setEnteredPin('');
+                setPinError('');
+                return true;
+            } else {
+                setPinError('Incorrect PIN. Please try again.');
+                return false;
+            }
+        } catch (error: any) {
+            setPinError(error.data?.message || 'PIN verification failed');
+            return false;
+        }
     };
 
     // Enhanced customer verification with better error handling
@@ -331,32 +419,73 @@ export default function TVSubscriptionScreen() {
             return;
         }
 
+        // Prepare transaction data
+        const transactionData = {
+            request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            serviceID: selectedProvider.serviceID,
+            billersCode: values.smartCardNumber,
+            variation_code: selectedPackage.variation_code,
+            amount: selectedPackage.variation_amount,
+            phone: values.phone,
+            formValues: values,
+            customerName: customerInfo.Customer_Name,
+            providerName: selectedProvider.name,
+            packageName: selectedPackage.name
+        };
+
+        // Check security setup and handle accordingly
+        const security = checkSecuritySetup();
+
+        if (!security.hasAnySecurity) {
+            // No security method enabled - redirect to profile
+            Alert.alert(
+                'Security Setup Required',
+                'To make transactions, you need to set up either a transaction PIN or enable biometric authentication.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Setup Security',
+                        onPress: () => router.push('/(tabs)/profile'),
+                    }
+                ]
+            );
+            return;
+        }
+
+        // Store pending transaction
+        setPendingTransaction(transactionData);
+
+        // Try biometric first if available
+        if (security.canUseBiometric) {
+            const biometricSuccess = await attemptBiometricAuth();
+            if (biometricSuccess) {
+                await processPayment(transactionData);
+            }
+        } else if (security.hasPin) {
+            // Show PIN modal
+            setSecurityType('pin');
+            setShowSecurityModal(true);
+        }
+    };
+
+    const processPayment = async (transactionData: any) => {
         try {
-            // Prepare the payload according to VTPass TV subscription API specification
+            console.log('Sending TV subscription payment request:', transactionData);
+
+            // Create the payload for the API
             const payload = {
-                request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                serviceID: selectedProvider.serviceID,
-                billersCode: values.smartCardNumber,
-                variation_code: selectedPackage.variation_code,
-                amount: selectedPackage.variation_amount,
-                phone: values.phone,
+                request_id: transactionData.request_id,
+                serviceID: transactionData.serviceID,
+                billersCode: transactionData.billersCode,
+                variation_code: transactionData.variation_code,
+                amount: transactionData.amount,
+                phone: transactionData.phone,
             };
 
-            console.log('Sending TV subscription payment request:', payload);
-
             const result = await payBill(payload).unwrap();
-
             console.log('TV subscription payment result:', result);
 
-            // Check the actual success status from the response
             const isActuallySuccessful = result.success === true;
-
-            console.log('Transaction status check:', {
-                resultSuccess: result.success,
-                resultMessage: result.message,
-                resultData: result.data,
-                isActuallySuccessful
-            });
 
             // Refetch wallet balance to update UI
             refetchWallet();
@@ -365,7 +494,7 @@ export default function TVSubscriptionScreen() {
                 // Success
                 Alert.alert(
                     'Payment Successful!',
-                    `${selectedPackage.name} subscription has been activated for ${customerInfo.Customer_Name}`,
+                    `${transactionData.packageName} subscription has been activated for ${transactionData.customerName}`,
                     [
                         {
                             text: 'View Receipt',
@@ -375,12 +504,12 @@ export default function TVSubscriptionScreen() {
                                     params: {
                                         transactionRef: result.data?.transactionRef || payload.request_id,
                                         type: 'tv-subscription',
-                                        network: selectedProvider.name,
-                                        billersCode: values.smartCardNumber,
-                                        amount: selectedPackage.variation_amount.toString(),
+                                        network: transactionData.providerName,
+                                        billersCode: transactionData.billersCode,
+                                        amount: transactionData.amount.toString(),
                                         status: 'successful',
-                                        serviceName: selectedPackage.name,
-                                        phone: values.phone
+                                        serviceName: transactionData.packageName,
+                                        phone: transactionData.phone
                                     }
                                 });
                             }
@@ -408,13 +537,13 @@ export default function TVSubscriptionScreen() {
                                     params: {
                                         transactionRef: result.data?.transactionRef || payload.request_id,
                                         type: 'tv-subscription',
-                                        network: selectedProvider.name,
-                                        billersCode: values.smartCardNumber,
-                                        amount: selectedPackage.variation_amount.toString(),
+                                        network: transactionData.providerName,
+                                        billersCode: transactionData.billersCode,
+                                        amount: transactionData.amount.toString(),
                                         status: 'failed',
                                         errorMessage: errorMessage,
-                                        serviceName: selectedPackage.name,
-                                        phone: values.phone
+                                        serviceName: transactionData.packageName,
+                                        phone: transactionData.phone
                                     }
                                 });
                             }
@@ -503,6 +632,102 @@ export default function TVSubscriptionScreen() {
                 )}
             </View>
         </TouchableOpacity>
+    );
+
+    const SecurityModal = () => (
+        <Modal
+            visible={showSecurityModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowSecurityModal(false)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Confirm Transaction</Text>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setShowSecurityModal(false);
+                                setEnteredPin('');
+                                setPinError('');
+                            }}
+                            style={styles.modalCloseButton}
+                        >
+                            <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.transactionSummary}>
+                        <Text style={styles.summaryText}>
+                            {selectedProvider?.name} Subscription
+                        </Text>
+                        <Text style={styles.summaryAmount}>
+                            {pendingTransaction ? formatCurrency(pendingTransaction.amount) : ''}
+                        </Text>
+                        <Text style={styles.summaryCard2}>
+                            {pendingTransaction ? `Card: ${pendingTransaction.billersCode}` : ''}
+                        </Text>
+                        <Text style={styles.summaryPackage}>
+                            {pendingTransaction ? pendingTransaction.packageName : ''}
+                        </Text>
+                        <Text style={styles.summaryCustomer}>
+                            {pendingTransaction ? pendingTransaction.customerName : ''}
+                        </Text>
+                    </View>
+
+                    <View style={styles.pinSection}>
+                        <Text style={styles.pinLabel}>Enter Transaction PIN</Text>
+                        <View style={styles.pinInputContainer}>
+                            <TextInput
+                                style={styles.pinInput}
+                                value={enteredPin}
+                                onChangeText={(text) => {
+                                    setEnteredPin(text.replace(/[^0-9]/g, '').slice(0, 4));
+                                    setPinError('');
+                                }}
+                                keyboardType="numeric"
+                                maxLength={4}
+                                secureTextEntry
+                                placeholder="••••"
+                                placeholderTextColor={COLORS.textTertiary}
+                            />
+                        </View>
+                        {pinError ? (
+                            <Text style={styles.pinError}>{pinError}</Text>
+                        ) : null}
+                    </View>
+
+                    <View style={styles.modalActions}>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => {
+                                setShowSecurityModal(false);
+                                setEnteredPin('');
+                                setPinError('');
+                            }}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[
+                                styles.confirmButton,
+                                enteredPin.length !== 4 && styles.confirmButtonDisabled
+                            ]}
+                            onPress={async () => {
+                                const verified = await verifyTransactionPin();
+                                if (verified && pendingTransaction) {
+                                    await processPayment(pendingTransaction);
+                                }
+                            }}
+                            disabled={enteredPin.length !== 4}
+                        >
+                            <Text style={styles.confirmButtonText}>Confirm</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
     );
 
     return (
@@ -829,6 +1054,7 @@ export default function TVSubscriptionScreen() {
                     }}
                 </Formik>
             </ScrollView>
+            <SecurityModal />
         </SafeAreaView>
     );
 }
@@ -1005,7 +1231,7 @@ const styles = StyleSheet.create({
         padding: SPACING.base,
         borderWidth: 1,
         borderColor: COLORS.success + '40',
-        ...SHADOWS.sm,
+        // ...SHADOWS.sm,
     },
     customerInfoHeader: {
         flexDirection: 'row',
@@ -1073,7 +1299,7 @@ const styles = StyleSheet.create({
         padding: SPACING.base,
         borderWidth: 1,
         borderColor: COLORS.success + '40',
-        ...SHADOWS.sm,
+        // ...SHADOWS.sm,
     },
     selectedPackageHeader: {
         flexDirection: 'row',
@@ -1195,6 +1421,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: COLORS.border,
         ...SHADOWS.sm,
+        // marginHorizontal: SPACING.lg,
     },
     summaryTitle: {
         fontSize: TYPOGRAPHY.fontSizes.base,
@@ -1256,5 +1483,137 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: SPACING.xl,
+    },
+    modalContent: {
+        backgroundColor: COLORS.background,
+        borderRadius: RADIUS.xl,
+        padding: SPACING.xl,
+        width: '100%',
+        maxWidth: 400,
+        ...SHADOWS.lg,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: SPACING.xl,
+    },
+    modalTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        color: COLORS.textPrimary,
+    },
+    modalCloseButton: {
+        padding: SPACING.xs,
+    },
+    transactionSummary: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.xl,
+        alignItems: 'center',
+    },
+    summaryText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        marginBottom: SPACING.xs,
+    },
+    summaryAmount: {
+        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        color: COLORS.primary,
+        marginBottom: SPACING.xs,
+    },
+    summaryCard2: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    summaryPackage: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        marginBottom: SPACING.xs,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+    },
+    summaryCustomer: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+        fontStyle: 'italic',
+    },
+    pinSection: {
+        marginBottom: SPACING.xl,
+    },
+    pinLabel: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.base,
+        textAlign: 'center',
+    },
+    pinInputContainer: {
+        alignItems: 'center',
+    },
+    pinInput: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        borderWidth: 2,
+        borderColor: COLORS.border,
+        paddingVertical: SPACING.base,
+        paddingHorizontal: SPACING.xl,
+        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        textAlign: 'center',
+        letterSpacing: 8,
+        color: COLORS.textPrimary,
+        width: 120,
+    },
+    pinError: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.error,
+        textAlign: 'center',
+        marginTop: SPACING.sm,
+    },
+    modalActions: {
+        flexDirection: 'row',
+        gap: SPACING.base,
+    },
+    cancelButton: {
+        flex: 1,
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        paddingVertical: SPACING.base,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelButtonText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textSecondary,
+    },
+    confirmButton: {
+        flex: 1,
+        backgroundColor: COLORS.primary,
+        borderRadius: RADIUS.lg,
+        paddingVertical: SPACING.base,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmButtonDisabled: {
+        backgroundColor: COLORS.textTertiary,
+        opacity: 0.6,
+    },
+    confirmButtonText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textInverse,
     },
 });
