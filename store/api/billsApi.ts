@@ -1,4 +1,4 @@
-// store/api/billsApi.ts - Enhanced with complete types
+// store/api/billsApi.ts - Enhanced with SMS Support
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '../index';
 
@@ -97,6 +97,142 @@ interface ServiceVariationsResponse {
   };
 }
 
+// NEW: SMS-specific interfaces
+interface SMSBalanceResponse {
+  success: boolean;
+  message: string;
+  data: {
+    balance: number;
+    units: number;
+    currency: string;
+  };
+}
+
+interface BulkSMSRequest {
+  recipients: string; // Comma-separated phone numbers or newline-separated
+  message: string;
+  sender?: string; // Optional sender ID (max 11 characters)
+  amount: number;
+  paymentMethod?: 'wallet';
+}
+
+interface SMSUnitsRequest {
+  units: number;
+  amount: number;
+  paymentMethod?: 'wallet';
+}
+
+interface BulkSMSResponse {
+  response_description: string;
+  success: boolean;
+  message: string;
+  data: {
+    transactionRef: string;
+    status: string;
+    amount: number;
+    serviceID: string;
+    serviceType: string;
+    walletBalance: number;
+    vtpassResponse: {
+      code: string;
+      message: string;
+      batchId: string;
+    };
+    emailSent: boolean;
+    notifications: {
+      emailSent: boolean;
+      emailAddress: string;
+    };
+    smsDetails: {
+      recipientCount: number;
+      messageLength: number;
+      totalUnits: number;
+      batchId: string;
+      sentDate: string;
+    };
+  };
+}
+
+// Insurance-specific interfaces
+interface InsuranceVariation {
+  variation_code: string;
+  name: string;
+  variation_amount: string;
+  fixedPrice: string;
+}
+
+interface InsuranceVariationsResponse {
+  response_description: string;
+  content: {
+    ServiceName: string;
+    serviceID: string;
+    convinience_fee: string;
+    variations: InsuranceVariation[];
+  };
+}
+
+interface VehicleColor {
+  ColourCode: string;
+  ColourName: string;
+}
+
+interface VehicleColorsResponse {
+  response_description: string;
+  content: VehicleColor[];
+}
+
+interface EngineCapacity {
+  CapacityCode: string;
+  CapacityName: string;
+}
+
+interface EngineCapacitiesResponse {
+  response_description: string;
+  content: EngineCapacity[];
+}
+
+interface State {
+  StateCode: string;
+  StateName: string;
+}
+
+interface StatesResponse {
+  response_description: string;
+  content: State[];
+}
+
+interface LGA {
+  LGACode: string;
+  LGAName: string;
+  StateCode: string;
+}
+
+interface LGAsResponse {
+  response_description: string;
+  content: LGA[];
+}
+
+interface VehicleMake {
+  VehicleMakeCode: string;
+  VehicleMakeName: string;
+}
+
+interface VehicleMakesResponse {
+  response_description: string;
+  content: VehicleMake[];
+}
+
+interface VehicleModel {
+  VehicleModelCode: string;
+  VehicleModelName: string;
+  VehicleMakeCode: string;
+}
+
+interface VehicleModelsResponse {
+  response_description: string;
+  content: VehicleModel[];
+}
+
 interface VerifyCustomerRequest {
   serviceID: string;
   billersCode: string;
@@ -123,36 +259,72 @@ interface PayBillRequest {
   variation_code?: string; // Optional for airtime, required for data/cable/electricity
   amount: number;
   phone: string;
+
+  // SMS-specific fields
+  recipients?: string; // For bulk SMS
+  message?: string; // For bulk SMS
+  sender?: string; // For bulk SMS
+  units?: number; // For SMS units purchase
+
+  // Insurance-specific fields for third-party motor insurance
+  Insured_Name?: string; // Required for ui-insure
+  engine_capacity?: string; // Required for ui-insure
+  Chasis_Number?: string; // Required for ui-insure
+  Plate_Number?: string; // Required for ui-insure
+  vehicle_make?: string; // Required for ui-insure
+  vehicle_color?: string; // Required for ui-insure
+  vehicle_model?: string; // Required for ui-insure
+  YearofMake?: string; // Required for ui-insure
+  state?: string; // Required for ui-insure
+  lga?: string; // Required for ui-insure
+  email?: string; // Required for ui-insure
 }
 
 interface PayBillResponse {
   response_description: string;
-  content: {
-    transactions: {
-      status: string;
-      product_name: string;
-      unique_element: string;
-      unit_price: number;
-      quantity: string;
-      service_verification: string;
-      channel: string;
-      commission: number;
-      total_amount: number;
-      discount: string;
-      type: string;
-      email: string;
-      phone: string;
-      name: string;
-      convinience_fee: string;
-      amount: number;
-      platform: string;
-      method: string;
+  success: boolean;
+  message: string;
+  data: {
+    transactionRef: string;
+    status: string;
+    amount: number;
+    serviceID: string;
+    serviceType: string;
+    walletBalance: number;
+    vtpassResponse: {
+      code: string;
+      message: string;
       transactionId: string;
+      certificateUrl?: string; // For insurance certificates
+      batchId?: string; // For SMS services
+    };
+    emailSent: boolean;
+    notifications: {
+      emailSent: boolean;
+      emailAddress: string;
+    };
+    // Insurance-specific response data
+    insurance?: {
+      plateNumber: string;
+      insuredName: string;
+      certificateUrl: string;
+      hasCertificate: boolean;
+    };
+    // SMS-specific response data
+    smsDetails?: {
+      recipientCount: number;
+      messageLength: number;
+      totalUnits: number;
+      batchId: string;
+      sentDate: string;
+    };
+    // SMS units response data
+    unitsDetails?: {
+      unitsPurchased: number;
+      unitPrice: number;
+      totalAmount: number;
     };
   };
-  purchased_code?: string;
-  token?: string;
-  reference?: string;
 }
 
 export const billsApi = createApi({
@@ -168,7 +340,7 @@ export const billsApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Wallet', 'Transactions', 'Services', 'VirtualAccount'],
+  tagTypes: ['Wallet', 'Transactions', 'Services', 'VirtualAccount', 'InsuranceOptions', 'SMS'],
   endpoints: (builder) => ({
     // Wallet endpoints
     getWalletBalance: builder.query<{data: WalletBalance}, void>({
@@ -261,6 +433,75 @@ export const billsApi = createApi({
       providesTags: ['Services'],
     }),
 
+    // NEW: SMS endpoints
+    getSMSBalance: builder.query<SMSBalanceResponse, void>({
+      query: () => '/bills/sms/balance',
+      providesTags: ['SMS'],
+    }),
+
+    sendBulkSMS: builder.mutation<BulkSMSResponse, BulkSMSRequest>({
+      query: (data) => ({
+        url: '/bills/sms/bulk',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Wallet', 'Transactions', 'SMS'],
+    }),
+
+    purchaseSMSUnits: builder.mutation<PayBillResponse, SMSUnitsRequest>({
+      query: (data) => ({
+        url: '/bills/sms/units',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Wallet', 'Transactions', 'SMS'],
+    }),
+
+    testSMSConnection: builder.query<{
+      success: boolean;
+      message: string;
+      data: any;
+    }, void>({
+      query: () => '/bills/sms/test-connection',
+      providesTags: ['SMS'],
+    }),
+
+    // Insurance-specific endpoints
+    getInsuranceVariations: builder.query<InsuranceVariationsResponse, void>({
+      query: () => '/bills/insurance/variations',
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getVehicleColors: builder.query<VehicleColorsResponse, void>({
+      query: () => '/bills/insurance/vehicle-colors',
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getEngineCapacities: builder.query<EngineCapacitiesResponse, void>({
+      query: () => '/bills/insurance/engine-capacities',
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getStates: builder.query<StatesResponse, void>({
+      query: () => '/bills/insurance/states',
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getLGAs: builder.query<LGAsResponse, string>({
+      query: (stateCode) => `/bills/insurance/lgas/${stateCode}`,
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getVehicleMakes: builder.query<VehicleMakesResponse, void>({
+      query: () => '/bills/insurance/vehicle-makes',
+      providesTags: ['InsuranceOptions'],
+    }),
+
+    getVehicleModels: builder.query<VehicleModelsResponse, string>({
+      query: (makeCode) => `/bills/insurance/vehicle-models/${makeCode}`,
+      providesTags: ['InsuranceOptions'],
+    }),
+
     verifyCustomer: builder.mutation<VerifyCustomerResponse, VerifyCustomerRequest>({
       query: (data) => ({
         url: '/bills/verify',
@@ -295,6 +536,7 @@ export const billsApi = createApi({
         paymentMethod: string;
         createdAt: string;
         updatedAt: string;
+        certificateUrl?: string; // For insurance certificates
       };
     }, string>({
       query: (transactionRef) => `/bills/transactions/${transactionRef}`,
@@ -336,6 +578,19 @@ export const {
   useGetServiceCategoriesQuery,
   useGetServicesByCategoryQuery,
   useGetServiceVariationsQuery,
+  // NEW: SMS-specific hooks
+  useGetSMSBalanceQuery,
+  useSendBulkSMSMutation,
+  usePurchaseSMSUnitsMutation,
+  useTestSMSConnectionQuery,
+  // Insurance-specific hooks
+  useGetInsuranceVariationsQuery,
+  useGetVehicleColorsQuery,
+  useGetEngineCapacitiesQuery,
+  useGetStatesQuery,
+  useGetLGAsQuery,
+  useGetVehicleMakesQuery,
+  useGetVehicleModelsQuery,
   useVerifyCustomerMutation,
   usePayBillMutation,
   useGetBillHistoryQuery,

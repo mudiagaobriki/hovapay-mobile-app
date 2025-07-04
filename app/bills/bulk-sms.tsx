@@ -228,38 +228,37 @@ export default function BulkSMSScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
-            {/* Header */}
-            <LinearGradient
-                colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-                style={styles.header}
-            >
-                <View style={styles.headerContent}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Bulk SMS</Text>
-                    <View style={styles.placeholder} />
-                </View>
-
-                {/* Balance Card */}
-                <View style={styles.balanceCard}>
-                    <Text style={styles.balanceLabel}>Wallet Balance</Text>
-                    <Text style={styles.balanceAmount}>
-                        {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
-                    </Text>
-                    <TouchableOpacity
-                        style={styles.fundButton}
-                        onPress={() => router.push('/wallet/fund')}
-                    >
-                        <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
-                        <Text style={styles.fundButtonText}>Add Money</Text>
-                    </TouchableOpacity>
-                </View>
-            </LinearGradient>
-
-            {/* Main Content */}
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <LinearGradient
+                    colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+                    style={styles.header}
+                >
+                    <View style={styles.headerContent}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Bulk SMS</Text>
+                        <View style={styles.placeholder} />
+                    </View>
+
+                    {/* Balance Card */}
+                    <View style={styles.balanceCard}>
+                        <Text style={styles.balanceLabel}>Wallet Balance</Text>
+                        <Text style={styles.balanceAmount}>
+                            {walletData ? formatCurrency(walletData.data.balance) : '₦0.00'}
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.fundButton}
+                            onPress={() => router.push('/wallet/fund')}
+                        >
+                            <MaterialIcons name="add" size={16} color={COLORS.textInverse} />
+                            <Text style={styles.fundButtonText}>Add Money</Text>
+                        </TouchableOpacity>
+                    </View>
+                </LinearGradient>
+
+                {/* Main Content */}
                 <Formik
                     initialValues={{
                         recipients: '',
@@ -562,7 +561,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: RADIUS['2xl'],
         borderTopRightRadius: RADIUS['2xl'],
         marginTop: -SPACING.base,
-        paddingTop: SPACING.xl,
+        paddingTop: SPACING.sm,
     },
     pricingCard: {
         flexDirection: 'row',
@@ -571,7 +570,7 @@ const styles = StyleSheet.create({
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
         marginHorizontal: SPACING.xl,
-        marginBottom: SPACING.xl,
+        marginVertical: SPACING.xl,
         borderWidth: 1,
         borderColor: COLORS.info + '40',
     },

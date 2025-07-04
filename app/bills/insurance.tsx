@@ -1,4 +1,4 @@
-// app/bills/insurance.tsx - Fixed with Pure React Native Components
+// app/bills/insurance.tsx - Updated for VTPass Third-Party Motor Insurance API
 import React, { useState } from 'react';
 import {
     StyleSheet,
@@ -22,9 +22,15 @@ import * as Yup from 'yup';
 import {
     useGetServicesByCategoryQuery,
     useGetServiceVariationsQuery,
-    useVerifyCustomerMutation,
     usePayBillMutation,
-    useGetWalletBalanceQuery
+    useGetWalletBalanceQuery,
+    // Import the new insurance hooks
+    useGetStatesQuery,
+    useGetLGAsQuery,
+    useGetVehicleMakesQuery,
+    useGetVehicleModelsQuery,
+    useGetVehicleColorsQuery,
+    useGetEngineCapacitiesQuery,
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -32,96 +38,410 @@ import {
     useGetUserProfileQuery,
     useVerifyTransactionPinMutation
 } from '@/store/api/profileApi';
-import { Modal } from 'react-native'
+import { Modal } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
-const InsuranceSchema = Yup.object().shape({
-    policyNumber: Yup.string()
-        .min(8, 'Policy number must be at least 8 characters')
-        .required('Policy number is required'),
-    amount: Yup.number()
-        .min(1000, 'Minimum amount is ₦1,000')
-        .max(1000000, 'Maximum amount is ₦1,000,000')
-        .required('Amount is required'),
+// Updated schema for third-party motor insurance
+const ThirdPartyInsuranceSchema = Yup.object().shape({
+    plateNumber: Yup.string()
+        .min(5, 'Plate number must be at least 5 characters')
+        .max(15, 'Plate number must not exceed 15 characters')
+        .required('Vehicle plate number is required'),
+    insuredName: Yup.string()
+        .min(2, 'Insured name must be at least 2 characters')
+        .required('Vehicle owner name is required'),
+    chassisNumber: Yup.string()
+        .min(10, 'Chassis number must be at least 10 characters')
+        .required('Vehicle chassis number is required'),
+    yearOfMake: Yup.number()
+        .min(1980, 'Year must be 1980 or later')
+        .max(new Date().getFullYear(), `Year cannot be future`)
+        .required('Year of manufacture is required'),
     phone: Yup.string()
         .matches(/^[0-9]{11}$/, 'Phone number must be 11 digits')
         .required('Phone number is required'),
-    customerName: Yup.string()
-        .min(2, 'Customer name must be at least 2 characters')
-        .required('Customer name is required'),
+    email: Yup.string()
+        .email('Invalid email address')
+        .required('Email address is required'),
 });
 
-const quickAmounts = [5000, 10000, 25000, 50000, 100000, 200000];
-
-const insuranceTypes = [
-    { value: 'life', label: 'Life Insurance' },
-    { value: 'health', label: 'Health Insurance' },
-    { value: 'auto', label: 'Auto Insurance' },
-    { value: 'property', label: 'Property Insurance' },
-    { value: 'business', label: 'Business Insurance' },
-    { value: 'travel', label: 'Travel Insurance' },
+// Insurance plan types (from VTPass variations)
+const insurancePlans = [
+    { code: '1', name: 'Private Vehicle', amount: 3000 },
+    { code: '2', name: 'Commercial Vehicle', amount: 5000 },
+    { code: '3', name: 'Tricycles', amount: 1500 },
+    { code: '4', name: 'Motorcycle', amount: 3000 },
 ];
 
-interface InsuranceProvider {
-    serviceID: string;
-    name: string;
-    image: string;
-    [key: string]: any;
-}
-
-interface InsurancePlan {
-    variation_code: string;
-    name: string;
-    variation_amount: number;
-    [key: string]: any;
-}
-
-interface CustomerInfo {
-    Customer_Name: string;
-    CustomerNumber?: string;
-    Status?: string;
-    DueDate?: string;
-    _verified?: boolean;
-    [key: string]: any;
-}
-
 interface FormValues {
-    policyNumber: string;
-    amount: string;
+    plateNumber: string;
+    insuredName: string;
+    chassisNumber: string;
+    yearOfMake: string;
     phone: string;
-    customerName: string;
+    email: string;
+}
+
+interface InsuranceOption {
+    code: string;
+    name: string;
+    amount?: number;
+}
+
+interface VehicleData {
+    selectedPlan: InsuranceOption | null;
+    selectedState: InsuranceOption | null;
+    selectedLGA: InsuranceOption | null;
+    selectedMake: InsuranceOption | null;
+    selectedModel: InsuranceOption | null;
+    selectedColor: InsuranceOption | null;
+    selectedEngineCapacity: InsuranceOption | null;
 }
 
 export default function InsuranceScreen() {
     const router = useRouter();
-    const [selectedProvider, setSelectedProvider] = useState<InsuranceProvider | null>(null);
-    const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-    const [selectedInsuranceType, setSelectedInsuranceType] = useState('life');
-    const [selectedPlan, setSelectedPlan] = useState<InsurancePlan | null>(null);
-    const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
-    const [isVerifying, setIsVerifying] = useState(false);
 
+    // Form state
+    const [vehicleData, setVehicleData] = useState<VehicleData>({
+        selectedPlan: null,
+        selectedState: null,
+        selectedLGA: null,
+        selectedMake: null,
+        selectedModel: null,
+        selectedColor: null,
+        selectedEngineCapacity: null,
+    });
+
+    // Options state - now using API hooks
+    const { data: statesData, isLoading: loadingStates } = useGetStatesQuery();
+    const { data: lgasData, isLoading: loadingLGAs, refetch: refetchLGAs } = useGetLGAsQuery(
+        vehicleData.selectedState?.code || '',
+        { skip: !vehicleData.selectedState?.code }
+    );
+    const { data: vehicleMakesData, isLoading: loadingMakes } = useGetVehicleMakesQuery();
+    const { data: vehicleModelsData, isLoading: loadingModels, refetch: refetchModels } = useGetVehicleModelsQuery(
+        vehicleData.selectedMake?.code || '',
+        { skip: !vehicleData.selectedMake?.code }
+    );
+    const { data: vehicleColorsData, isLoading: loadingColors } = useGetVehicleColorsQuery();
+    const { data: engineCapacitiesData, isLoading: loadingEngineCapacities } = useGetEngineCapacitiesQuery();
+
+    // Transform API data to our format with proper fallbacks
+    const states = React.useMemo(() => {
+        if (statesData?.content && Array.isArray(statesData.content)) {
+            return statesData.content.map((item: any) => ({
+                code: item.StateCode || item.code,
+                name: item.StateName || item.name
+            }));
+        }
+        // Fallback states
+        return [
+            { code: '1', name: 'Abia' },
+            { code: '2', name: 'Adamawa' },
+            { code: '3', name: 'Akwa Ibom' },
+            { code: '4', name: 'Anambra' },
+            { code: '5', name: 'Bauchi' },
+            { code: '6', name: 'Bayelsa' },
+            { code: '7', name: 'FCT' },
+            { code: '8', name: 'Benue' },
+            { code: '9', name: 'Borno' },
+            { code: '10', name: 'Cross River' },
+            { code: '11', name: 'Delta' },
+            { code: '12', name: 'Ebonyi' },
+            { code: '13', name: 'Edo' },
+            { code: '14', name: 'Ekiti' },
+            { code: '15', name: 'Enugu' },
+            { code: '16', name: 'Gombe' },
+            { code: '17', name: 'Imo' },
+            { code: '18', name: 'Jigawa' },
+            { code: '19', name: 'Kaduna' },
+            { code: '20', name: 'Kano' },
+            { code: '21', name: 'Katsina' },
+            { code: '22', name: 'Kebbi' },
+            { code: '23', name: 'Kogi' },
+            { code: '24', name: 'Kwara' },
+            { code: '25', name: 'Lagos' },
+            { code: '26', name: 'Nasarawa' },
+            { code: '27', name: 'Niger' },
+            { code: '28', name: 'Ogun' },
+            { code: '29', name: 'Ondo' },
+            { code: '30', name: 'Osun' },
+            { code: '31', name: 'Oyo' },
+            { code: '32', name: 'Plateau' },
+            { code: '33', name: 'Rivers' },
+            { code: '34', name: 'Sokoto' },
+            { code: '35', name: 'Taraba' },
+            { code: '36', name: 'Yobe' },
+            { code: '37', name: 'Zamfara' }
+        ];
+    }, [statesData]);
+
+    const lgas = React.useMemo(() => {
+        // If we have API data, use it
+        if (lgasData?.content && Array.isArray(lgasData.content) && lgasData.content.length > 0) {
+            console.log('Using API LGA data:', lgasData.content);
+            return lgasData.content.map((item: any) => ({
+                code: item.LGACode || item.code,
+                name: item.LGAName || item.name
+            }));
+        }
+
+        // If a state is selected but no API data, use fallback
+        if (vehicleData.selectedState) {
+            console.log('Using fallback LGA data for state:', vehicleData.selectedState.name);
+            const fallbackLGAs: { [key: string]: InsuranceOption[] } = {
+                '1': [ // Abia
+                    { code: '770', name: 'Aba' },
+                    { code: '1', name: 'Aba North' },
+                    { code: '2', name: 'Aba South' },
+                    { code: '3', name: 'Arochukwu' },
+                    { code: '4', name: 'Bende' },
+                    { code: '5', name: 'Ikwuano' },
+                    { code: '6', name: 'Isiala Ngwa North' },
+                    { code: '7', name: 'Isiala Ngwa South' },
+                    { code: '8', name: 'Isuikwuato' },
+                    { code: '9', name: 'Obi Ngwa' },
+                    { code: '10', name: 'Ohafia' },
+                    { code: '11', name: 'Osisioma' },
+                    { code: '12', name: 'Ugwunagbo' },
+                    { code: '13', name: 'Ukwa East' },
+                    { code: '14', name: 'Ukwa West' },
+                    { code: '15', name: 'Umuahia North' },
+                    { code: '16', name: 'Umuahia South' },
+                    { code: '17', name: 'Umu Nneochi' }
+                ],
+                '25': [ // Lagos
+                    { code: '450', name: 'Agege' },
+                    { code: '451', name: 'Ajeromi-Ifelodun' },
+                    { code: '452', name: 'Alimosho' },
+                    { code: '453', name: 'Amuwo-Odofin' },
+                    { code: '454', name: 'Apapa' },
+                    { code: '455', name: 'Badagry' },
+                    { code: '456', name: 'Epe' },
+                    { code: '457', name: 'Eti Osa' },
+                    { code: '458', name: 'Ibeju-Lekki' },
+                    { code: '459', name: 'Ifako-Ijaiye' },
+                    { code: '460', name: 'Ikeja' },
+                    { code: '461', name: 'Ikorodu' },
+                    { code: '462', name: 'Kosofe' },
+                    { code: '463', name: 'Lagos Island' },
+                    { code: '464', name: 'Lagos Mainland' },
+                    { code: '465', name: 'Mushin' },
+                    { code: '466', name: 'Ojo' },
+                    { code: '467', name: 'Oshodi-Isolo' },
+                    { code: '468', name: 'Shomolu' },
+                    { code: '469', name: 'Surulere' }
+                ],
+                '7': [ // FCT
+                    { code: '780', name: 'Abaji' },
+                    { code: '781', name: 'Abuja Municipal' },
+                    { code: '782', name: 'Bwari' },
+                    { code: '783', name: 'Gwagwalada' },
+                    { code: '784', name: 'Kuje' },
+                    { code: '785', name: 'Kwali' }
+                ],
+                '4': [ // Anambra
+                    { code: '100', name: 'Aguata' },
+                    { code: '101', name: 'Anambra East' },
+                    { code: '102', name: 'Anambra West' },
+                    { code: '103', name: 'Anaocha' },
+                    { code: '104', name: 'Awka North' },
+                    { code: '105', name: 'Awka South' },
+                    { code: '106', name: 'Ayamelum' },
+                    { code: '107', name: 'Dunukofia' },
+                    { code: '108', name: 'Ekwusigo' },
+                    { code: '109', name: 'Idemili North' },
+                    { code: '110', name: 'Idemili South' },
+                    { code: '111', name: 'Ihiala' },
+                    { code: '112', name: 'Njikoka' },
+                    { code: '113', name: 'Nnewi North' },
+                    { code: '114', name: 'Nnewi South' },
+                    { code: '115', name: 'Ogbaru' },
+                    { code: '116', name: 'Onitsha North' },
+                    { code: '117', name: 'Onitsha South' },
+                    { code: '118', name: 'Orumba North' },
+                    { code: '119', name: 'Orumba South' },
+                    { code: '120', name: 'Oyi' }
+                ],
+                '33': [ // Rivers
+                    { code: '600', name: 'Port Harcourt' },
+                    { code: '601', name: 'Obio-Akpor' },
+                    { code: '602', name: 'Okrika' },
+                    { code: '603', name: 'Ogu–Bolo' },
+                    { code: '604', name: 'Eleme' },
+                    { code: '605', name: 'Tai' },
+                    { code: '606', name: 'Gokana' },
+                    { code: '607', name: 'Khana' },
+                    { code: '608', name: 'Oyigbo' },
+                    { code: '609', name: 'Opobo–Nkoro' },
+                    { code: '610', name: 'Andoni' },
+                    { code: '611', name: 'Bonny' },
+                    { code: '612', name: 'Degema' },
+                    { code: '613', name: 'Asari-Toru' },
+                    { code: '614', name: 'Akuku-Toru' },
+                    { code: '615', name: 'Abua–Odual' },
+                    { code: '616', name: 'Ahoada West' },
+                    { code: '617', name: 'Ahoada East' },
+                    { code: '618', name: 'Ogba–Egbema–Ndoni' },
+                    { code: '619', name: 'Emohua' },
+                    { code: '620', name: 'Ikwerre' },
+                    { code: '621', name: 'Etche' },
+                    { code: '622', name: 'Omuma' }
+                ]
+            };
+
+            const stateLGAs = fallbackLGAs[vehicleData.selectedState.code];
+            if (stateLGAs) {
+                return stateLGAs;
+            }
+
+            // Generic fallback for states without specific LGA data
+            return [
+                { code: `${vehicleData.selectedState.code}01`, name: `${vehicleData.selectedState.name} Central` },
+                { code: `${vehicleData.selectedState.code}02`, name: `${vehicleData.selectedState.name} North` },
+                { code: `${vehicleData.selectedState.code}03`, name: `${vehicleData.selectedState.name} South` },
+                { code: `${vehicleData.selectedState.code}04`, name: `${vehicleData.selectedState.name} East` },
+                { code: `${vehicleData.selectedState.code}05`, name: `${vehicleData.selectedState.name} West` }
+            ];
+        }
+
+        // No state selected
+        console.log('No state selected, returning empty LGA array');
+        return [];
+    }, [lgasData, vehicleData.selectedState]);
+
+    const vehicleMakes = React.useMemo(() => {
+        if (vehicleMakesData?.content && Array.isArray(vehicleMakesData.content)) {
+            return vehicleMakesData.content.map((item: any) => ({
+                code: item.VehicleMakeCode || item.code,
+                name: item.VehicleMakeName || item.name
+            }));
+        }
+        // Fallback vehicle makes
+        return [
+            { code: '335', name: 'Toyota' },
+            { code: '1', name: 'Honda' },
+            { code: '2', name: 'Nissan' },
+            { code: '3', name: 'Hyundai' },
+            { code: '4', name: 'Kia' },
+            { code: '5', name: 'Mercedes-Benz' },
+            { code: '6', name: 'BMW' },
+            { code: '7', name: 'Volkswagen' },
+            { code: '8', name: 'Ford' },
+            { code: '9', name: 'Peugeot' },
+            { code: '10', name: 'Mazda' },
+            { code: '11', name: 'Lexus' },
+            { code: '12', name: 'Infiniti' },
+            { code: '13', name: 'Acura' },
+            { code: '14', name: 'Mitsubishi' },
+            { code: '15', name: 'Suzuki' },
+            { code: '16', name: 'Isuzu' },
+            { code: '17', name: 'Jeep' },
+            { code: '18', name: 'Land Rover' },
+            { code: '19', name: 'Volvo' },
+            { code: '20', name: 'Audi' }
+        ];
+    }, [vehicleMakesData]);
+
+    const vehicleModels = React.useMemo(() => {
+        if (vehicleModelsData?.content && Array.isArray(vehicleModelsData.content)) {
+            return vehicleModelsData.content.map((item: any) => ({
+                code: item.VehicleModelCode || item.code,
+                name: item.VehicleModelName || item.name
+            }));
+        }
+        // Fallback models based on selected make
+        if (vehicleData.selectedMake) {
+            const fallbackModels: { [key: string]: InsuranceOption[] } = {
+                '335': [ // Toyota
+                    { code: '745', name: 'Camry' },
+                    { code: '746', name: 'Corolla' },
+                    { code: '747', name: 'Highlander' },
+                    { code: '748', name: 'RAV4' },
+                    { code: '749', name: 'Sienna' },
+                    { code: '750', name: 'Prius' },
+                    { code: '751', name: 'Avalon' },
+                    { code: '752', name: 'Venza' }
+                ],
+                '1': [ // Honda
+                    { code: '1', name: 'Accord' },
+                    { code: '2', name: 'Civic' },
+                    { code: '3', name: 'CR-V' },
+                    { code: '4', name: 'Pilot' },
+                    { code: '5', name: 'Odyssey' },
+                    { code: '6', name: 'Fit' }
+                ]
+            };
+            return fallbackModels[vehicleData.selectedMake.code] || [
+                { code: '999', name: 'Other Model' }
+            ];
+        }
+        return [];
+    }, [vehicleModelsData, vehicleData.selectedMake]);
+
+    const vehicleColors = React.useMemo(() => {
+        if (vehicleColorsData?.content && Array.isArray(vehicleColorsData.content)) {
+            return vehicleColorsData.content.map((item: any) => ({
+                code: item.ColourCode || item.code,
+                name: item.ColourName || item.name
+            }));
+        }
+        // Fallback colors
+        return [
+            { code: '20', name: 'Ash' },
+            { code: '1004', name: 'Black' },
+            { code: '1001', name: 'White' },
+            { code: '1002', name: 'Red' },
+            { code: '1003', name: 'Blue' },
+            { code: '1005', name: 'Silver' },
+            { code: '1006', name: 'Gold' },
+            { code: '1007', name: 'Green' },
+            { code: '1008', name: 'Yellow' },
+            { code: '1009', name: 'Orange' }
+        ];
+    }, [vehicleColorsData]);
+
+    const engineCapacities = React.useMemo(() => {
+        if (engineCapacitiesData?.content && Array.isArray(engineCapacitiesData.content)) {
+            return engineCapacitiesData.content.map((item: any) => ({
+                code: item.CapacityCode || item.code,
+                name: item.CapacityName || item.name
+            }));
+        }
+        // Fallback engine capacities
+        return [
+            { code: '1', name: '0.1 - 1.59L' },
+            { code: '2', name: '1.6 - 2.0L' },
+            { code: '3', name: '2.1 - 3.0L' },
+            { code: '4', name: '3.1 - 4.0L' },
+            { code: '5', name: '4.1 - 5.0L' },
+            { code: '6', name: 'Above 5.0L' }
+        ];
+    }, [engineCapacitiesData]);
+
+    // Modal state for dropdowns
+    const [showDropdownModal, setShowDropdownModal] = useState(false);
+    const [dropdownData, setDropdownData] = useState<{
+        title: string;
+        options: InsuranceOption[];
+        onSelect: (option: InsuranceOption) => void;
+        selectedValue: InsuranceOption | null;
+    } | null>(null);
+    const [dropdownSearchText, setDropdownSearchText] = useState('');
+
+    // Security modal state
     const [showSecurityModal, setShowSecurityModal] = useState(false);
     const [securityType, setSecurityType] = useState<'pin' | 'biometric' | null>(null);
     const [enteredPin, setEnteredPin] = useState('');
     const [pinError, setPinError] = useState('');
     const [pendingTransaction, setPendingTransaction] = useState<any>(null);
 
-
-    const { data: insuranceServices } = useGetServicesByCategoryQuery('insurance');
+    // API hooks
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
-    const { data: variations, isLoading: variationsLoading } = useGetServiceVariationsQuery(
-        selectedProvider?.serviceID,
-        { skip: !selectedProvider }
-    );
-    const [verifyCustomer] = useVerifyCustomerMutation();
     const [payBill, { isLoading }] = usePayBillMutation();
-
     const { data: userProfile } = useGetUserProfileQuery();
     const [verifyPin] = useVerifyTransactionPinMutation();
-
-    const providers = insuranceServices?.content || [];
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-NG', {
@@ -131,9 +451,112 @@ export default function InsuranceScreen() {
         }).format(amount);
     };
 
+    // Utility function to safely separate API data from display data
+    const separateTransactionData = (combinedData: any) => {
+        if (!combinedData) {
+            console.error('separateTransactionData: combinedData is null or undefined');
+            return { apiData: null, displayData: null };
+        }
+
+        // Define API fields (only these should be sent to the backend)
+        const apiFields = [
+            'request_id', 'serviceID', 'billersCode', 'variation_code', 'amount', 'phone',
+            'Insured_Name', 'engine_capacity', 'Chasis_Number', 'Plate_Number',
+            'vehicle_make', 'vehicle_color', 'vehicle_model', 'YearofMake',
+            'state', 'lga', 'email'
+        ];
+
+        // Define display fields
+        const displayFields = ['formValues', 'vehicleData', 'planName', 'providerName', 'insuranceType'];
+
+        // Extract API data
+        const apiData: any = {};
+        apiFields.forEach(field => {
+            if (combinedData[field] !== undefined) {
+                apiData[field] = combinedData[field];
+            }
+        });
+
+        // Extract display data
+        const displayData: any = {};
+        displayFields.forEach(field => {
+            if (combinedData[field] !== undefined) {
+                displayData[field] = combinedData[field];
+            }
+        });
+
+        console.log('Data separation result:', {
+            hasApiData: Object.keys(apiData).length > 0,
+            hasDisplayData: Object.keys(displayData).length > 0,
+            apiDataKeys: Object.keys(apiData),
+            displayDataKeys: Object.keys(displayData)
+        });
+
+        return { apiData, displayData };
+    };
+
+    const openDropdownModal = (
+        title: string,
+        options: InsuranceOption[],
+        onSelect: (option: InsuranceOption) => void,
+        selectedValue: InsuranceOption | null
+    ) => {
+        setDropdownData({ title, options, onSelect, selectedValue });
+        setDropdownSearchText('');
+        setShowDropdownModal(true);
+    };
+
+    const closeDropdownModal = () => {
+        setShowDropdownModal(false);
+        setDropdownData(null);
+        setDropdownSearchText('');
+    };
+
+    const filteredDropdownOptions = dropdownData?.options.filter(option =>
+        option.name.toLowerCase().includes(dropdownSearchText.toLowerCase())
+    ) || [];
+
+    // Handle state selection
+    const handleStateSelect = (state: InsuranceOption) => {
+        console.log('State selected:', state.name, 'Code:', state.code);
+        setVehicleData(prev => ({
+            ...prev,
+            selectedState: state,
+            selectedLGA: null // Reset LGA when state changes
+        }));
+    };
+
+    // Handle make selection
+    const handleMakeSelect = (make: InsuranceOption) => {
+        console.log('Vehicle make selected:', make.name, 'Code:', make.code);
+        setVehicleData(prev => ({
+            ...prev,
+            selectedMake: make,
+            selectedModel: null // Reset model when make changes
+        }));
+    };
+
+    // Effect to log LGA data changes for debugging
+    React.useEffect(() => {
+        if (vehicleData.selectedState) {
+            console.log('Selected state changed to:', vehicleData.selectedState.name);
+            console.log('LGAs loading status:', loadingLGAs);
+            console.log('LGAs data:', lgasData);
+        }
+    }, [vehicleData.selectedState, loadingLGAs, lgasData]);
+
+    // Effect to log vehicle model data changes for debugging
+    React.useEffect(() => {
+        if (vehicleData.selectedMake) {
+            console.log('Selected make changed to:', vehicleData.selectedMake.name);
+            console.log('Models loading status:', loadingModels);
+            console.log('Models data:', vehicleModelsData);
+        }
+    }, [vehicleData.selectedMake, loadingModels, vehicleModelsData]);
+
     const checkSecuritySetup = () => {
-        const hasPin = userProfile?.data?.pin; // Pin exists in database
-        const hasBiometric = userProfile?.data?.biometricTransactions; // Biometric enabled for transactions
+        const hasPin = userProfile?.data?.pin;
+        const hasBiometric = userProfile?.data?.biometricTransactions;
 
         return {
             hasPin: !!hasPin,
@@ -146,7 +569,7 @@ export default function InsuranceScreen() {
     const attemptBiometricAuth = async () => {
         try {
             const biometricAuth = await LocalAuthentication.authenticateAsync({
-                promptMessage: 'Confirm your transaction',
+                promptMessage: 'Confirm your insurance purchase',
                 subtitle: 'Use your biometric to authorize this payment',
                 cancelLabel: 'Cancel',
                 fallbackLabel: 'Use PIN'
@@ -157,7 +580,6 @@ export default function InsuranceScreen() {
             } else if (biometricAuth.error === 'UserCancel') {
                 return false;
             } else {
-                // Biometric failed, try PIN if available
                 const security = checkSecuritySetup();
                 if (security.hasPin) {
                     setSecurityType('pin');
@@ -204,14 +626,43 @@ export default function InsuranceScreen() {
         }
     };
 
-// REPLACE your existing handlePayment function with this:
     const handlePayment = async (values: FormValues) => {
-        if (!selectedProvider) {
-            Alert.alert('Error', 'Please select an insurance provider');
+        if (!vehicleData.selectedPlan) {
+            Alert.alert('Error', 'Please select an insurance plan');
             return;
         }
 
-        const amount = selectedPlan ? selectedPlan.variation_amount : Number(values.amount);
+        if (!vehicleData.selectedState) {
+            Alert.alert('Error', 'Please select a state');
+            return;
+        }
+
+        if (!vehicleData.selectedLGA) {
+            Alert.alert('Error', 'Please select a local government area');
+            return;
+        }
+
+        if (!vehicleData.selectedMake) {
+            Alert.alert('Error', 'Please select vehicle make');
+            return;
+        }
+
+        if (!vehicleData.selectedModel) {
+            Alert.alert('Error', 'Please select vehicle model');
+            return;
+        }
+
+        if (!vehicleData.selectedColor) {
+            Alert.alert('Error', 'Please select vehicle color');
+            return;
+        }
+
+        if (!vehicleData.selectedEngineCapacity) {
+            Alert.alert('Error', 'Please select engine capacity');
+            return;
+        }
+
+        const amount = vehicleData.selectedPlan.amount || 0;
 
         // Check wallet balance
         if (walletData && amount > walletData?.data?.balance) {
@@ -231,26 +682,56 @@ export default function InsuranceScreen() {
             return;
         }
 
-        // Prepare transaction data
+        // Prepare transaction data for third-party motor insurance
         const transactionData = {
-            request_id: `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            serviceID: selectedProvider.serviceID,
-            billersCode: values.policyNumber,
-            variation_code: selectedPlan?.variation_code || selectedInsuranceType,
+            request_id: `INS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            serviceID: 'ui-insure', // VTPass third-party insurance service ID
+            billersCode: values.plateNumber.toUpperCase(),
+            variation_code: vehicleData.selectedPlan.code.toString(), // Ensure it's a string
             amount: amount,
             phone: values.phone,
+
+            // Additional required fields for third-party motor insurance
+            Insured_Name: values.insuredName,
+            engine_capacity: vehicleData.selectedEngineCapacity.code.toString(),
+            Chasis_Number: values.chassisNumber.toUpperCase(),
+            Plate_Number: values.plateNumber.toUpperCase(),
+            vehicle_make: vehicleData.selectedMake.code.toString(),
+            vehicle_color: vehicleData.selectedColor.code.toString(),
+            vehicle_model: vehicleData.selectedModel.code.toString(),
+            YearofMake: values.yearOfMake.toString(),
+            state: vehicleData.selectedState.code.toString(),
+            lga: vehicleData.selectedLGA.code.toString(),
+            email: values.email,
+        };
+
+        console.log('Transaction data prepared:', {
+            serviceID: transactionData.serviceID,
+            variation_code: `"${transactionData.variation_code}" (${typeof transactionData.variation_code})`,
+            amount: transactionData.amount,
+            hasAllFields: !!(
+                transactionData.serviceID &&
+                transactionData.variation_code &&
+                transactionData.amount &&
+                transactionData.phone &&
+                transactionData.Insured_Name &&
+                transactionData.Plate_Number
+            )
+        });
+
+        // Separate display data (not sent to API)
+        const displayData = {
             formValues: values,
-            customerName: values.customerName,
-            providerName: selectedProvider.name,
-            planName: selectedPlan?.name || `${selectedInsuranceType} Insurance`,
-            insuranceType: insuranceTypes.find(t => t.value === selectedInsuranceType)?.label
+            vehicleData: vehicleData,
+            planName: vehicleData.selectedPlan.name,
+            providerName: 'Universal Insurance',
+            insuranceType: 'Third-Party Motor Insurance'
         };
 
         // Check security setup and handle accordingly
         const security = checkSecuritySetup();
 
         if (!security.hasAnySecurity) {
-            // No security method enabled - redirect to profile
             Alert.alert(
                 'Security Setup Required',
                 'To make transactions, you need to set up either a transaction PIN or enable biometric authentication.',
@@ -275,142 +756,16 @@ export default function InsuranceScreen() {
                 await processPayment(transactionData);
             }
         } else if (security.hasPin) {
-            // Show PIN modal
             setSecurityType('pin');
             setShowSecurityModal(true);
         }
     };
 
-    // Enhanced customer verification with better error handling
-    const handleVerifyCustomer = async (policyNumber: string, formik: FormikProps<FormValues>) => {
-        if (!selectedProvider || !policyNumber) return;
-
-        setIsVerifying(true);
-        try {
-            const result = await verifyCustomer({
-                serviceID: selectedProvider.serviceID,
-                billersCode: policyNumber,
-                type: selectedInsuranceType,
-            }).unwrap();
-
-            console.log('Policy verification result:', result);
-
-            // Check for verification success
-            if (result.content && result.content.Customer_Name) {
-                setCustomerInfo({
-                    ...result.content,
-                    _verified: true
-                });
-                Alert.alert(
-                    'Policy Verified!',
-                    `Policy Holder: ${result.content.Customer_Name}${result.content.Status ? `\nStatus: ${result.content.Status}` : ''}`,
-                    [{ text: 'Continue', style: 'default' }]
-                );
-            } else {
-                throw new Error('Policy details not found');
-            }
-        } catch (error: any) {
-            console.error('Policy verification failed:', error);
-
-            let errorMessage = 'Unable to verify policy details.';
-
-            if (error.message) {
-                errorMessage = error.message;
-            } else if (error.data?.message) {
-                errorMessage = error.data.message;
-            } else if (error.data?.response_description) {
-                errorMessage = error.data.response_description;
-            }
-
-            // Enhanced error handling for insurance verification
-            const isTestingError = errorMessage.toLowerCase().includes('invalid') ||
-                errorMessage.toLowerCase().includes('not found') ||
-                errorMessage.toLowerCase().includes('may be invalid');
-
-            if (isTestingError) {
-                Alert.alert(
-                    'Policy Verification Failed',
-                    `${errorMessage}\n\nThis often happens in sandbox mode with real policy numbers. Would you like to:`,
-                    [
-                        {
-                            text: 'Try Different Number',
-                            style: 'default',
-                            onPress: () => {
-                                formik.setFieldValue('policyNumber', '');
-                                setCustomerInfo(null);
-                            }
-                        },
-                        {
-                            text: 'Use Test Data',
-                            style: 'destructive',
-                            onPress: () => {
-                                Alert.alert(
-                                    'Test Policy Numbers',
-                                    `Try these test numbers for ${selectedProvider.name}:\n\n` +
-                                    `• INS1234567890\n` +
-                                    `• POL123456789\n` +
-                                    `• TEST987654321\n` +
-                                    `• 1234567890\n\n` +
-                                    `These are commonly used test numbers in VTPass sandbox.`,
-                                    [{ text: 'OK', style: 'default' }]
-                                );
-                            }
-                        },
-                        {
-                            text: 'Continue Anyway',
-                            style: 'cancel',
-                            onPress: () => {
-                                const fallbackCustomerInfo = {
-                                    Customer_Name: formik.values.customerName || 'Test Policy Holder',
-                                    CustomerNumber: policyNumber,
-                                    Status: 'Active',
-                                    _verified: false
-                                };
-                                setCustomerInfo(fallbackCustomerInfo);
-                            }
-                        }
-                    ]
-                );
-            } else {
-                Alert.alert(
-                    'Verification Error',
-                    errorMessage,
-                    [
-                        {
-                            text: 'Try Again',
-                            style: 'default',
-                            onPress: () => {
-                                formik.setFieldValue('policyNumber', '');
-                                setCustomerInfo(null);
-                            }
-                        },
-                        {
-                            text: 'Cancel',
-                            style: 'cancel'
-                        }
-                    ]
-                );
-            }
-        } finally {
-            setIsVerifying(false);
-        }
-    };
-
     const processPayment = async (transactionData: any) => {
         try {
-            console.log('Sending insurance payment request:', transactionData);
+            console.log('Sending third-party motor insurance payment request:', transactionData);
 
-            // Create the payload for the API
-            const payload = {
-                request_id: transactionData.request_id,
-                serviceID: transactionData.serviceID,
-                billersCode: transactionData.billersCode,
-                variation_code: transactionData.variation_code,
-                amount: transactionData.amount,
-                phone: transactionData.phone,
-            };
-
-            const result = await payBill(payload).unwrap();
+            const result = await payBill(transactionData).unwrap();
             console.log('Insurance payment result:', result);
 
             const isActuallySuccessful = result.success === true;
@@ -419,10 +774,12 @@ export default function InsuranceScreen() {
             refetchWallet();
 
             if (isActuallySuccessful) {
-                // Success
+                // Success - third-party insurance includes certificate URL
+                const certificateUrl = result.data?.vtpassResponse?.certUrl || result.data?.vtpassResponse?.purchased_code;
+
                 Alert.alert(
-                    'Payment Successful!',
-                    `₦${transactionData.amount} has been paid for policy ${transactionData.billersCode}${transactionData.customerName ? ` for ${transactionData.customerName}` : ''}`,
+                    'Insurance Purchase Successful!',
+                    `Third-party motor insurance has been purchased for vehicle ${transactionData.Plate_Number}${certificateUrl ? '\n\nYour insurance certificate is ready for download.' : ''}`,
                     [
                         {
                             text: 'View Receipt',
@@ -430,14 +787,19 @@ export default function InsuranceScreen() {
                                 router.push({
                                     pathname: '/bills/receipt',
                                     params: {
-                                        transactionRef: result.data?.transactionRef || payload.request_id,
+                                        transactionRef: result.data?.transactionRef || transactionData.request_id,
                                         type: 'insurance',
-                                        network: transactionData.providerName,
-                                        billersCode: transactionData.billersCode,
+                                        network: 'Third-Party Motor Insurance',
+                                        billersCode: transactionData.Plate_Number,
                                         amount: transactionData.amount.toString(),
                                         status: 'successful',
-                                        serviceName: transactionData.planName,
-                                        phone: transactionData.phone
+                                        serviceName: displayData?.planName || 'Motor Insurance',
+                                        phone: transactionData.phone,
+                                        certificateUrl: certificateUrl || '',
+                                        insuredName: transactionData.Insured_Name,
+                                        vehicleMake: transactionData?.vehicleData?.selectedMake?.name || 'Unknown',
+                                        vehicleModel: transactionData?.vehicleData?.selectedModel?.name || 'Unknown',
+                                        yearOfMake: transactionData.YearofMake,
                                     }
                                 });
                             }
@@ -450,11 +812,10 @@ export default function InsuranceScreen() {
                     ]
                 );
             } else {
-                // Transaction failed
                 const errorMessage = result.message || result.data?.vtpassResponse?.message || 'Transaction failed. Please try again.';
 
                 Alert.alert(
-                    'Transaction Failed',
+                    'Insurance Purchase Failed',
                     errorMessage,
                     [
                         {
@@ -463,14 +824,14 @@ export default function InsuranceScreen() {
                                 router.push({
                                     pathname: '/bills/receipt',
                                     params: {
-                                        transactionRef: result.data?.transactionRef || payload.request_id,
+                                        transactionRef: result.data?.transactionRef || transactionData.request_id,
                                         type: 'insurance',
-                                        network: transactionData.providerName,
-                                        billersCode: transactionData.billersCode,
+                                        network: 'Third-Party Motor Insurance',
+                                        billersCode: transactionData.Plate_Number,
                                         amount: transactionData.amount.toString(),
                                         status: 'failed',
                                         errorMessage: errorMessage,
-                                        serviceName: transactionData.planName,
+                                        serviceName: displayData?.planName || 'Motor Insurance',
                                         phone: transactionData.phone
                                     }
                                 });
@@ -503,104 +864,139 @@ export default function InsuranceScreen() {
         }
     };
 
-    const renderProvider = (provider: InsuranceProvider) => (
+    const renderPlanCard = (plan: typeof insurancePlans[0]) => (
         <TouchableOpacity
-            key={provider.serviceID}
-            style={[
-                styles.providerCard,
-                selectedProvider?.serviceID === provider.serviceID && styles.providerCardSelected
-            ]}
-            onPress={() => {
-                setSelectedProvider(provider);
-                setCustomerInfo(null);
-                setSelectedPlan(null);
-            }}
-        >
-            <Image
-                source={{ uri: provider.image }}
-                style={styles.providerImage}
-                resizeMode="contain"
-            />
-            <Text style={styles.providerName}>
-                {provider.name.replace(' Insurance', '').replace(' - ', '\n')}
-            </Text>
-            {selectedProvider?.serviceID === provider.serviceID && (
-                <View style={styles.selectedBadge}>
-                    <MaterialIcons name="check" size={16} color={COLORS.textInverse} />
-                </View>
-            )}
-        </TouchableOpacity>
-    );
-
-    const renderInsuranceType = (type: any) => (
-        <TouchableOpacity
-            key={type.value}
-            style={[
-                styles.typeCard,
-                selectedInsuranceType === type.value && styles.typeCardSelected
-            ]}
-            onPress={() => {
-                setSelectedInsuranceType(type.value);
-                setCustomerInfo(null);
-                setSelectedPlan(null);
-            }}
-        >
-            <Text style={[
-                styles.typeText,
-                selectedInsuranceType === type.value && styles.typeTextSelected
-            ]}>
-                {type.label}
-            </Text>
-        </TouchableOpacity>
-    );
-
-    const renderInsurancePlan = (plan: InsurancePlan) => (
-        <TouchableOpacity
-            key={plan.variation_code}
+            key={plan.code}
             style={[
                 styles.planCard,
-                selectedPlan?.variation_code === plan.variation_code && styles.planCardSelected
+                vehicleData.selectedPlan?.code === plan.code && styles.planCardSelected
             ]}
-            onPress={() => setSelectedPlan(plan)}
+            onPress={() => setVehicleData(prev => ({ ...prev, selectedPlan: plan }))}
         >
             <View style={styles.planContent}>
                 <View style={styles.planInfo}>
                     <Text style={[
                         styles.planName,
-                        selectedPlan?.variation_code === plan.variation_code && styles.planNameSelected
+                        vehicleData.selectedPlan?.code === plan.code && styles.planNameSelected
                     ]}>
                         {plan.name}
                     </Text>
                     <Text style={styles.planPrice}>
-                        {formatCurrency(plan.variation_amount)}
+                        {formatCurrency(plan.amount)}
                     </Text>
                 </View>
-                {selectedPlan?.variation_code === plan.variation_code && (
+                {vehicleData.selectedPlan?.code === plan.code && (
                     <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
                 )}
             </View>
         </TouchableOpacity>
     );
 
-    const renderQuickAmount = (amount: number, setFieldValue: (field: string, value: any) => void) => (
-        <TouchableOpacity
-            key={amount}
-            style={[
-                styles.amountCard,
-                selectedAmount === amount && styles.amountCardSelected
-            ]}
-            onPress={() => {
-                setSelectedAmount(amount);
-                setFieldValue('amount', amount.toString());
-            }}
+    const renderDropdown = (
+        title: string,
+        value: InsuranceOption | null,
+        options: InsuranceOption[],
+        onSelect: (option: InsuranceOption) => void,
+        loading: boolean = false,
+        placeholder: string = 'Select...'
+    ) => (
+        <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            <TouchableOpacity
+                style={[styles.inputContainer, !value && styles.inputContainerPlaceholder]}
+                onPress={() => {
+                    if (options.length === 0) {
+                        Alert.alert('No Options', 'No options available for this selection.');
+                        return;
+                    }
+                    openDropdownModal(title, options, onSelect, value);
+                }}
+                disabled={loading || options.length === 0}
+            >
+                <MaterialIcons
+                    name="arrow-drop-down"
+                    size={20}
+                    color={COLORS.textTertiary}
+                    style={styles.inputIcon}
+                />
+                <Text style={[
+                    styles.dropdownText,
+                    !value && styles.dropdownPlaceholder
+                ]}>
+                    {loading ? 'Loading...' : value?.name || placeholder}
+                </Text>
+            </TouchableOpacity>
+        </View>
+    );
+
+    const DropdownModal = () => (
+        <Modal
+            visible={showDropdownModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={closeDropdownModal}
         >
-            <Text style={[
-                styles.amountText,
-                selectedAmount === amount && styles.amountTextSelected
-            ]}>
-                {formatCurrency(amount)}
-            </Text>
-        </TouchableOpacity>
+            <View style={styles.modalOverlay}>
+                <View style={styles.dropdownModalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>{dropdownData?.title}</Text>
+                        <TouchableOpacity
+                            onPress={closeDropdownModal}
+                            style={styles.modalCloseButton}
+                        >
+                            <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Search Input */}
+                    {dropdownData && dropdownData.options.length > 10 && (
+                        <View style={styles.searchContainer}>
+                            <MaterialIcons name="search" size={20} color={COLORS.textTertiary} style={styles.searchIcon} />
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder={`Search ${dropdownData.title.toLowerCase()}...`}
+                                placeholderTextColor={COLORS.textTertiary}
+                                value={dropdownSearchText}
+                                onChangeText={setDropdownSearchText}
+                                autoCapitalize="none"
+                            />
+                        </View>
+                    )}
+
+                    <ScrollView style={styles.optionsContainer} showsVerticalScrollIndicator={false}>
+                        {filteredDropdownOptions.map((option) => (
+                            <TouchableOpacity
+                                key={option.code}
+                                style={[
+                                    styles.optionItem,
+                                    dropdownData?.selectedValue?.code === option.code && styles.optionItemSelected
+                                ]}
+                                onPress={() => {
+                                    dropdownData?.onSelect(option);
+                                    closeDropdownModal();
+                                }}
+                            >
+                                <Text style={[
+                                    styles.optionText,
+                                    dropdownData?.selectedValue?.code === option.code && styles.optionTextSelected
+                                ]}>
+                                    {option.name}
+                                </Text>
+                                {dropdownData?.selectedValue?.code === option.code && (
+                                    <MaterialIcons name="check" size={20} color={COLORS.primary} />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+
+                        {filteredDropdownOptions.length === 0 && dropdownSearchText && (
+                            <View style={styles.noOptionsContainer}>
+                                <Text style={styles.noOptionsText}>No options found</Text>
+                            </View>
+                        )}
+                    </ScrollView>
+                </View>
+            </View>
+        </Modal>
     );
 
     const SecurityModal = () => (
@@ -613,7 +1009,7 @@ export default function InsuranceScreen() {
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>Confirm Transaction</Text>
+                        <Text style={styles.modalTitle}>Confirm Insurance Purchase</Text>
                         <TouchableOpacity
                             onPress={() => {
                                 setShowSecurityModal(false);
@@ -627,20 +1023,18 @@ export default function InsuranceScreen() {
                     </View>
 
                     <View style={styles.transactionSummary}>
-                        <Text style={styles.summaryText}>
-                            {selectedProvider?.name.replace(' Insurance', '')} Insurance
-                        </Text>
+                        <Text style={styles.summaryText}>Third-Party Motor Insurance</Text>
                         <Text style={styles.summaryAmount}>
                             {pendingTransaction ? formatCurrency(pendingTransaction.amount) : ''}
                         </Text>
                         <Text style={styles.summaryPolicy}>
-                            {pendingTransaction ? `Policy: ${pendingTransaction.billersCode}` : ''}
+                            {pendingTransaction ? `Vehicle: ${pendingTransaction.Plate_Number || pendingTransaction.plateNumber}` : ''}
                         </Text>
                         <Text style={styles.summaryType}>
-                            {pendingTransaction ? pendingTransaction.insuranceType : ''}
+                            {pendingTransaction ? (pendingTransaction.planName || pendingTransaction.vehicleData?.selectedPlan?.name || 'Motor Insurance') : ''}
                         </Text>
                         <Text style={styles.summaryCustomer}>
-                            {pendingTransaction ? pendingTransaction.customerName : ''}
+                            {pendingTransaction ? (pendingTransaction.Insured_Name || pendingTransaction.formValues?.insuredName) : ''}
                         </Text>
                     </View>
 
@@ -686,7 +1080,12 @@ export default function InsuranceScreen() {
                             onPress={async () => {
                                 const verified = await verifyTransactionPin();
                                 if (verified && pendingTransaction) {
-                                    await processPayment(pendingTransaction);
+                                    const { apiData, displayData } = separateTransactionData(pendingTransaction);
+                                    if (apiData) {
+                                        await processPayment(apiData, displayData);
+                                    } else {
+                                        Alert.alert('Error', 'Invalid transaction data. Please try again.');
+                                    }
                                 }
                             }}
                             disabled={enteredPin.length !== 4}
@@ -712,7 +1111,7 @@ export default function InsuranceScreen() {
                         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                             <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Pay Insurance</Text>
+                        <Text style={styles.headerTitle}>Third-Party Motor Insurance</Text>
                         <View style={styles.placeholder} />
                     </View>
 
@@ -728,62 +1127,35 @@ export default function InsuranceScreen() {
                 {/* Main Content */}
                 <Formik
                     initialValues={{
-                        policyNumber: '',
-                        amount: '',
+                        plateNumber: '',
+                        insuredName: '',
+                        chassisNumber: '',
+                        yearOfMake: '',
                         phone: '',
-                        customerName: ''
+                        email: ''
                     }}
-                    validationSchema={InsuranceSchema}
+                    validationSchema={ThirdPartyInsuranceSchema}
                     onSubmit={handlePayment}
                 >
                     {(formik) => {
-                        const { handleChange, handleBlur, handleSubmit, values, errors, touched, setFieldValue } = formik;
+                        const { handleChange, handleBlur, handleSubmit, values, errors, touched } = formik;
 
                         return (
                             <>
-                                {/* Provider Selection */}
+                                {/* Insurance Plan Selection */}
                                 <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Select Insurance Provider</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                        <View style={styles.providersGrid}>
-                                            {providers.slice(0, 8).map(renderProvider)}
-                                        </View>
-                                    </ScrollView>
-                                </View>
-
-                                {/* Insurance Type */}
-                                <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Insurance Type</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                        <View style={styles.typesGrid}>
-                                            {insuranceTypes.map(renderInsuranceType)}
-                                        </View>
-                                    </ScrollView>
-                                </View>
-
-                                {/* Insurance Plans (if available) */}
-                                {selectedProvider && variations?.content?.variations?.length > 0 && (
-                                    <View style={styles.section}>
-                                        <Text style={styles.sectionTitle}>Select Plan</Text>
-                                        {variationsLoading ? (
-                                            <View style={styles.loadingContainer}>
-                                                <ActivityIndicator size="large" color={COLORS.primary} />
-                                                <Text style={styles.loadingText}>Loading plans...</Text>
-                                            </View>
-                                        ) : (
-                                            <View style={styles.plansContainer}>
-                                                {variations.content.variations.map(renderInsurancePlan)}
-                                            </View>
-                                        )}
+                                    <Text style={styles.sectionTitle}>Select Insurance Plan</Text>
+                                    <View style={styles.plansContainer}>
+                                        {insurancePlans.map(renderPlanCard)}
                                     </View>
-                                )}
+                                </View>
 
-                                {/* Customer Name */}
+                                {/* Vehicle Owner Name */}
                                 <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Policy Holder Name</Text>
+                                    <Text style={styles.sectionTitle}>Vehicle Owner Name</Text>
                                     <View style={[
                                         styles.inputContainer,
-                                        touched.customerName && errors.customerName && styles.inputContainerError
+                                        touched.insuredName && errors.insuredName && styles.inputContainerError
                                     ]}>
                                         <MaterialIcons
                                             name="person"
@@ -793,110 +1165,165 @@ export default function InsuranceScreen() {
                                         />
                                         <TextInput
                                             style={styles.textInput}
-                                            placeholder="Enter policy holder name"
+                                            placeholder="Enter vehicle owner's full name"
                                             placeholderTextColor={COLORS.textTertiary}
-                                            value={values.customerName}
-                                            onChangeText={handleChange('customerName')}
-                                            onBlur={handleBlur('customerName')}
+                                            value={values.insuredName}
+                                            onChangeText={handleChange('insuredName')}
+                                            onBlur={handleBlur('insuredName')}
                                             returnKeyType="next"
                                         />
                                     </View>
-                                    {touched.customerName && errors.customerName && (
-                                        <Text style={styles.errorText}>{errors.customerName}</Text>
+                                    {touched.insuredName && errors.insuredName && (
+                                        <Text style={styles.errorText}>{errors.insuredName}</Text>
                                     )}
                                 </View>
 
-                                {/* Policy Number */}
+                                {/* Vehicle Plate Number */}
                                 <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Policy Number</Text>
+                                    <Text style={styles.sectionTitle}>Vehicle Plate Number</Text>
                                     <View style={[
                                         styles.inputContainer,
-                                        touched.policyNumber && errors.policyNumber && styles.inputContainerError
+                                        touched.plateNumber && errors.plateNumber && styles.inputContainerError
                                     ]}>
                                         <MaterialIcons
-                                            name="security"
+                                            name="directions-car"
                                             size={20}
                                             color={COLORS.textTertiary}
                                             style={styles.inputIcon}
                                         />
                                         <TextInput
                                             style={styles.textInput}
-                                            placeholder="Enter policy number"
+                                            placeholder="e.g., ABC123DE"
                                             placeholderTextColor={COLORS.textTertiary}
-                                            value={values.policyNumber}
-                                            onChangeText={(text) => {
-                                                handleChange('policyNumber')(text);
-                                                setCustomerInfo(null);
-                                            }}
-                                            onBlur={handleBlur('policyNumber')}
-                                            returnKeyType="done"
+                                            value={values.plateNumber}
+                                            onChangeText={(text) => handleChange('plateNumber')(text.toUpperCase())}
+                                            onBlur={handleBlur('plateNumber')}
+                                            returnKeyType="next"
+                                            autoCapitalize="characters"
                                         />
-                                        <TouchableOpacity
-                                            style={[
-                                                styles.verifyButton,
-                                                (!selectedProvider || !values.policyNumber || isVerifying) && styles.verifyButtonDisabled
-                                            ]}
-                                            onPress={() => handleVerifyCustomer(values.policyNumber, formik)}
-                                            disabled={!selectedProvider || !values.policyNumber || isVerifying}
-                                        >
-                                            {isVerifying ? (
-                                                <ActivityIndicator size="small" color={COLORS.textInverse} />
-                                            ) : (
-                                                <Text style={styles.verifyButtonText}>Verify</Text>
-                                            )}
-                                        </TouchableOpacity>
                                     </View>
-                                    {touched.policyNumber && errors.policyNumber && (
-                                        <Text style={styles.errorText}>{errors.policyNumber}</Text>
-                                    )}
-
-                                    {/* Helpful hint for sandbox testing */}
-                                    {selectedProvider && !customerInfo && (
-                                        <View style={styles.hintCard}>
-                                            <MaterialIcons name="info" size={16} color={COLORS.info} />
-                                            <Text style={styles.hintText}>
-                                                Testing in sandbox? Try: INS1234567890, POL123456789, or TEST987654321
-                                            </Text>
-                                        </View>
+                                    {touched.plateNumber && errors.plateNumber && (
+                                        <Text style={styles.errorText}>{errors.plateNumber}</Text>
                                     )}
                                 </View>
 
-                                {/* Customer Info */}
-                                {customerInfo && (
-                                    <View style={styles.customerInfoCard}>
-                                        <View style={styles.customerInfoHeader}>
-                                            <MaterialIcons
-                                                name={customerInfo._verified ? "check-circle" : "info"}
-                                                size={24}
-                                                color={customerInfo._verified ? COLORS.success : COLORS.warning}
-                                            />
-                                            <Text style={styles.customerInfoTitle}>
-                                                {customerInfo._verified ? 'Policy Verified' : 'Using Test Data'}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.customerInfoRow}>
-                                            <Text style={styles.customerInfoLabel}>Policy Holder:</Text>
-                                            <Text style={styles.customerInfoValue}>{customerInfo.Customer_Name}</Text>
-                                        </View>
-                                        {customerInfo.CustomerNumber && (
-                                            <View style={styles.customerInfoRow}>
-                                                <Text style={styles.customerInfoLabel}>Policy Number:</Text>
-                                                <Text style={styles.customerInfoValue}>{customerInfo.CustomerNumber}</Text>
-                                            </View>
-                                        )}
-                                        {customerInfo.Status && (
-                                            <View style={styles.customerInfoRow}>
-                                                <Text style={styles.customerInfoLabel}>Status:</Text>
-                                                <Text style={styles.customerInfoValue}>{customerInfo.Status}</Text>
-                                            </View>
-                                        )}
-                                        {customerInfo.DueDate && (
-                                            <View style={styles.customerInfoRow}>
-                                                <Text style={styles.customerInfoLabel}>Due Date:</Text>
-                                                <Text style={styles.customerInfoValue}>{customerInfo.DueDate}</Text>
-                                            </View>
-                                        )}
+                                {/* Vehicle Chassis Number */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>Vehicle Chassis Number</Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        touched.chassisNumber && errors.chassisNumber && styles.inputContainerError
+                                    ]}>
+                                        <MaterialIcons
+                                            name="settings"
+                                            size={20}
+                                            color={COLORS.textTertiary}
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            placeholder="Enter vehicle chassis number"
+                                            placeholderTextColor={COLORS.textTertiary}
+                                            value={values.chassisNumber}
+                                            onChangeText={(text) => handleChange('chassisNumber')(text.toUpperCase())}
+                                            onBlur={handleBlur('chassisNumber')}
+                                            returnKeyType="next"
+                                            autoCapitalize="characters"
+                                        />
                                     </View>
+                                    {touched.chassisNumber && errors.chassisNumber && (
+                                        <Text style={styles.errorText}>{errors.chassisNumber}</Text>
+                                    )}
+                                </View>
+
+                                {/* Year of Manufacture */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>Year of Manufacture</Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        touched.yearOfMake && errors.yearOfMake && styles.inputContainerError
+                                    ]}>
+                                        <MaterialIcons
+                                            name="calendar-today"
+                                            size={20}
+                                            color={COLORS.textTertiary}
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            placeholder="e.g., 2020"
+                                            placeholderTextColor={COLORS.textTertiary}
+                                            value={values.yearOfMake}
+                                            onChangeText={handleChange('yearOfMake')}
+                                            onBlur={handleBlur('yearOfMake')}
+                                            keyboardType="numeric"
+                                            maxLength={4}
+                                            returnKeyType="next"
+                                        />
+                                    </View>
+                                    {touched.yearOfMake && errors.yearOfMake && (
+                                        <Text style={styles.errorText}>{errors.yearOfMake}</Text>
+                                    )}
+                                </View>
+
+                                {/* State Selection */}
+                                {renderDropdown(
+                                    'State',
+                                    vehicleData.selectedState,
+                                    states,
+                                    handleStateSelect,
+                                    loadingStates,
+                                    'Select state'
+                                )}
+
+                                {/* LGA Selection */}
+                                {vehicleData.selectedState && renderDropdown(
+                                    'Local Government Area',
+                                    vehicleData.selectedLGA,
+                                    lgas,
+                                    (lga) => setVehicleData(prev => ({ ...prev, selectedLGA: lga })),
+                                    loadingLGAs,
+                                    'Select LGA'
+                                )}
+
+                                {/* Vehicle Make Selection */}
+                                {renderDropdown(
+                                    'Vehicle Make',
+                                    vehicleData.selectedMake,
+                                    vehicleMakes,
+                                    handleMakeSelect,
+                                    loadingMakes,
+                                    'Select vehicle make'
+                                )}
+
+                                {/* Vehicle Model Selection */}
+                                {vehicleData.selectedMake && renderDropdown(
+                                    'Vehicle Model',
+                                    vehicleData.selectedModel,
+                                    vehicleModels,
+                                    (model) => setVehicleData(prev => ({ ...prev, selectedModel: model })),
+                                    loadingModels,
+                                    'Select vehicle model'
+                                )}
+
+                                {/* Vehicle Color Selection */}
+                                {renderDropdown(
+                                    'Vehicle Color',
+                                    vehicleData.selectedColor,
+                                    vehicleColors,
+                                    (color) => setVehicleData(prev => ({ ...prev, selectedColor: color })),
+                                    loadingColors,
+                                    'Select vehicle color'
+                                )}
+
+                                {/* Engine Capacity Selection */}
+                                {renderDropdown(
+                                    'Engine Capacity',
+                                    vehicleData.selectedEngineCapacity,
+                                    engineCapacities,
+                                    (capacity) => setVehicleData(prev => ({ ...prev, selectedEngineCapacity: capacity })),
+                                    loadingEngineCapacities,
+                                    'Select engine capacity'
                                 )}
 
                                 {/* Phone Number */}
@@ -921,7 +1348,7 @@ export default function InsuranceScreen() {
                                             onBlur={handleBlur('phone')}
                                             keyboardType="phone-pad"
                                             maxLength={11}
-                                            returnKeyType="done"
+                                            returnKeyType="next"
                                         />
                                     </View>
                                     {touched.phone && errors.phone && (
@@ -929,102 +1356,125 @@ export default function InsuranceScreen() {
                                     )}
                                 </View>
 
-                                {/* Quick Amounts */}
-                                {!selectedPlan && (
-                                    <View style={styles.section}>
-                                        <Text style={styles.sectionTitle}>Quick Amount</Text>
-                                        <View style={styles.amountsGrid}>
-                                            {quickAmounts.map(amount => renderQuickAmount(amount, setFieldValue))}
-                                        </View>
+                                {/* Email Address */}
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>Email Address</Text>
+                                    <View style={[
+                                        styles.inputContainer,
+                                        touched.email && errors.email && styles.inputContainerError
+                                    ]}>
+                                        <MaterialIcons
+                                            name="email"
+                                            size={20}
+                                            color={COLORS.textTertiary}
+                                            style={styles.inputIcon}
+                                        />
+                                        <TextInput
+                                            style={styles.textInput}
+                                            placeholder="your.email@example.com"
+                                            placeholderTextColor={COLORS.textTertiary}
+                                            value={values.email}
+                                            onChangeText={handleChange('email')}
+                                            onBlur={handleBlur('email')}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            returnKeyType="done"
+                                        />
                                     </View>
-                                )}
-
-                                {/* Custom Amount */}
-                                {!selectedPlan && (
-                                    <View style={styles.section}>
-                                        <Text style={styles.sectionTitle}>Or Enter Amount</Text>
-                                        <View style={[
-                                            styles.inputContainer,
-                                            touched.amount && errors.amount && styles.inputContainerError
-                                        ]}>
-                                            <Text style={styles.currencySymbol}>₦</Text>
-                                            <TextInput
-                                                style={styles.textInput}
-                                                placeholder="0"
-                                                placeholderTextColor={COLORS.textTertiary}
-                                                value={values.amount.toString()}
-                                                onChangeText={(text) => {
-                                                    setFieldValue('amount', text);
-                                                    // Reset selected amount when typing custom amount
-                                                    if (text && !quickAmounts.includes(Number(text))) {
-                                                        setSelectedAmount(null);
-                                                    }
-                                                }}
-                                                onBlur={handleBlur('amount')}
-                                                keyboardType="numeric"
-                                                returnKeyType="done"
-                                            />
-                                        </View>
-                                        {touched.amount && errors.amount && (
-                                            <Text style={styles.errorText}>{errors.amount}</Text>
-                                        )}
-                                    </View>
-                                )}
+                                    {touched.email && errors.email && (
+                                        <Text style={styles.errorText}>{errors.email}</Text>
+                                    )}
+                                </View>
 
                                 {/* Payment Summary */}
-                                {selectedProvider && values.customerName && values.policyNumber && (values.amount || selectedPlan) && values.phone && (
+                                {vehicleData.selectedPlan && values.plateNumber && values.insuredName && (
                                     <View style={styles.summaryCard}>
-                                        <Text style={styles.summaryTitle}>Payment Summary</Text>
+                                        <Text style={styles.summaryTitle}>Insurance Summary</Text>
                                         <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Provider:</Text>
-                                            <Text style={styles.summaryValue}>
-                                                {selectedProvider.name.replace(' Insurance', '')}
-                                            </Text>
+                                            <Text style={styles.summaryLabel}>Plan Type:</Text>
+                                            <Text style={styles.summaryValue}>{vehicleData.selectedPlan.name}</Text>
                                         </View>
                                         <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Policy Holder:</Text>
-                                            <Text style={styles.summaryValue} numberOfLines={2}>{values.customerName}</Text>
+                                            <Text style={styles.summaryLabel}>Vehicle Owner:</Text>
+                                            <Text style={styles.summaryValue} numberOfLines={2}>{values.insuredName}</Text>
                                         </View>
                                         <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Policy Number:</Text>
-                                            <Text style={styles.summaryValue}>{values.policyNumber}</Text>
+                                            <Text style={styles.summaryLabel}>Plate Number:</Text>
+                                            <Text style={styles.summaryValue}>{values.plateNumber}</Text>
                                         </View>
-                                        <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Insurance Type:</Text>
-                                            <Text style={styles.summaryValue}>
-                                                {insuranceTypes.find(t => t.value === selectedInsuranceType)?.label}
-                                            </Text>
-                                        </View>
-                                        {selectedPlan && (
+                                        {vehicleData.selectedMake && (
                                             <View style={styles.summaryRow}>
-                                                <Text style={styles.summaryLabel}>Plan:</Text>
-                                                <Text style={styles.summaryValue} numberOfLines={2}>{selectedPlan.name}</Text>
+                                                <Text style={styles.summaryLabel}>Vehicle:</Text>
+                                                <Text style={styles.summaryValue}>
+                                                    {vehicleData.selectedMake.name} {vehicleData.selectedModel?.name || ''}
+                                                </Text>
+                                            </View>
+                                        )}
+                                        {values.yearOfMake && (
+                                            <View style={styles.summaryRow}>
+                                                <Text style={styles.summaryLabel}>Year:</Text>
+                                                <Text style={styles.summaryValue}>{values.yearOfMake}</Text>
+                                            </View>
+                                        )}
+                                        {vehicleData.selectedState && (
+                                            <View style={styles.summaryRow}>
+                                                <Text style={styles.summaryLabel}>Location:</Text>
+                                                <Text style={styles.summaryValue}>
+                                                    {vehicleData.selectedLGA?.name || ''}, {vehicleData.selectedState.name}
+                                                </Text>
                                             </View>
                                         )}
                                         <View style={[styles.summaryRow, styles.summaryTotal]}>
-                                            <Text style={styles.summaryTotalLabel}>Total:</Text>
+                                            <Text style={styles.summaryTotalLabel}>Premium:</Text>
                                             <Text style={styles.summaryTotalValue}>
-                                                {formatCurrency(
-                                                    selectedPlan ? selectedPlan.variation_amount : Number(values.amount)
-                                                )}
+                                                {formatCurrency(vehicleData.selectedPlan.amount || 0)}
                                             </Text>
                                         </View>
                                     </View>
                                 )}
 
-                                {/* Payment Button */}
+                                {/* Info Card */}
+                                <View style={styles.infoCard}>
+                                    <MaterialIcons name="info" size={20} color={COLORS.info} />
+                                    <View style={styles.infoContent}>
+                                        <Text style={styles.infoTitle}>Third-Party Motor Insurance</Text>
+                                        <Text style={styles.infoText}>
+                                            This insurance covers damages to third parties in case of an accident.
+                                            Your insurance certificate will be available for download after successful payment.
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Sandbox Testing Info */}
+                                <View style={styles.warningCard}>
+                                    <MaterialIcons name="warning" size={20} color={COLORS.warning} />
+                                    <View style={styles.infoContent}>
+                                        <Text style={styles.warningTitle}>Sandbox Testing Notice</Text>
+                                        <Text style={styles.warningText}>
+                                            You're currently in sandbox mode. Vehicle verification may fail with test data.
+                                            For successful testing, try using realistic vehicle information or contact VTPass support for test credentials.
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                {/* Purchase Button */}
                                 <TouchableOpacity
                                     style={[
                                         styles.paymentButton,
-                                        (!selectedProvider || !values.customerName || !values.policyNumber || (!values.amount && !selectedPlan) || !values.phone || isLoading) && styles.paymentButtonDisabled
+                                        (!vehicleData.selectedPlan || !values.plateNumber || !values.insuredName ||
+                                            !values.chassisNumber || !values.yearOfMake || !values.phone || !values.email ||
+                                            !vehicleData.selectedState || !vehicleData.selectedLGA || !vehicleData.selectedMake ||
+                                            !vehicleData.selectedModel || !vehicleData.selectedColor || !vehicleData.selectedEngineCapacity ||
+                                            isLoading) && styles.paymentButtonDisabled
                                     ]}
-                                    onPress={() => {
-                                        if (selectedPlan) {
-                                            setFieldValue('amount', selectedPlan.variation_amount.toString());
-                                        }
-                                        handleSubmit();
-                                    }}
-                                    disabled={!selectedProvider || !values.customerName || !values.policyNumber || (!values.amount && !selectedPlan) || !values.phone || isLoading}
+                                    onPress={() => handleSubmit()}
+                                    disabled={
+                                        !vehicleData.selectedPlan || !values.plateNumber || !values.insuredName ||
+                                        !values.chassisNumber || !values.yearOfMake || !values.phone || !values.email ||
+                                        !vehicleData.selectedState || !vehicleData.selectedLGA || !vehicleData.selectedMake ||
+                                        !vehicleData.selectedModel || !vehicleData.selectedColor || !vehicleData.selectedEngineCapacity ||
+                                        isLoading
+                                    }
                                 >
                                     {isLoading ? (
                                         <View style={styles.loadingButtonContainer}>
@@ -1033,11 +1483,9 @@ export default function InsuranceScreen() {
                                         </View>
                                     ) : (
                                         <Text style={styles.paymentButtonText}>
-                                            Pay Premium - {selectedPlan
-                                            ? formatCurrency(selectedPlan.variation_amount)
-                                            : values.amount
-                                                ? formatCurrency(Number(values.amount))
-                                                : '₦0'
+                                            Purchase Insurance - {vehicleData.selectedPlan
+                                            ? formatCurrency(vehicleData.selectedPlan.amount || 0)
+                                            : '₦0'
                                         }
                                         </Text>
                                     )}
@@ -1047,6 +1495,7 @@ export default function InsuranceScreen() {
                     }}
                 </Formik>
             </ScrollView>
+            <DropdownModal />
             <SecurityModal />
         </SafeAreaView>
     );
@@ -1072,9 +1521,11 @@ const styles = StyleSheet.create({
         padding: SPACING.xs,
     },
     headerTitle: {
-        fontSize: TYPOGRAPHY.fontSizes.xl,
+        fontSize: TYPOGRAPHY.fontSizes.lg,
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.textInverse,
+        textAlign: 'center',
+        flex: 1,
     },
     placeholder: {
         width: 32,
@@ -1113,91 +1564,6 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
         marginBottom: SPACING.base,
     },
-    providersGrid: {
-        flexDirection: 'row',
-        paddingHorizontal: SPACING.base,
-    },
-    providerCard: {
-        width: 120,
-        backgroundColor: COLORS.background,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        alignItems: 'center',
-        // borderWidth: 2,
-        borderColor: COLORS.border,
-        marginRight: SPACING.base,
-        position: 'relative',
-        // ...SHADOWS.sm,
-    },
-    providerCardSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primaryBackground,
-    },
-    providerImage: {
-        width: 50,
-        height: 50,
-        marginBottom: SPACING.sm,
-    },
-    providerName: {
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        lineHeight: TYPOGRAPHY.fontSizes.xs * 1.2,
-    },
-    selectedBadge: {
-        position: 'absolute',
-        top: 0,
-        right: -8,
-        backgroundColor: COLORS.primary,
-        borderRadius: RADIUS.full,
-        width: 24,
-        height: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    typesGrid: {
-        flexDirection: 'row',
-        paddingHorizontal: SPACING.base,
-    },
-    typeCard: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        marginRight: SPACING.base,
-        minWidth: 100,
-    },
-    typeCardSelected: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    typeText: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-    },
-    typeTextSelected: {
-        color: COLORS.textInverse,
-    },
-    loadingContainer: {
-        alignItems: 'center',
-        paddingVertical: SPACING.xl,
-    },
-    loadingButtonContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    loadingText: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        color: COLORS.textSecondary,
-        marginTop: SPACING.base,
-        textAlign: 'center',
-    },
     plansContainer: {
         gap: SPACING.base,
     },
@@ -1207,7 +1573,6 @@ const styles = StyleSheet.create({
         padding: SPACING.base,
         borderWidth: 1,
         borderColor: COLORS.border,
-        // ...SHADOWS.sm,
     },
     planCardSelected: {
         borderColor: COLORS.primary,
@@ -1250,6 +1615,9 @@ const styles = StyleSheet.create({
         borderColor: COLORS.error,
         backgroundColor: COLORS.withOpacity(COLORS.error, 0.05),
     },
+    inputContainerPlaceholder: {
+        backgroundColor: COLORS.backgroundSecondary,
+    },
     inputIcon: {
         marginRight: SPACING.md,
     },
@@ -1261,84 +1629,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 0,
         textAlignVertical: 'center',
     },
-    verifyButton: {
-        backgroundColor: COLORS.primary,
-        paddingHorizontal: SPACING.base,
-        paddingVertical: SPACING.sm,
-        borderRadius: RADIUS.base,
-        minWidth: 60,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...SHADOWS.sm,
-    },
-    verifyButtonDisabled: {
-        backgroundColor: COLORS.textTertiary,
-        opacity: 0.6,
-    },
-    verifyButtonText: {
-        color: COLORS.textInverse,
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-    },
-    hintCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.info + '10',
-        borderRadius: RADIUS.base,
-        padding: SPACING.sm,
-        marginTop: SPACING.sm,
-        borderWidth: 1,
-        borderColor: COLORS.info + '30',
-    },
-    hintText: {
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        color: COLORS.info,
-        marginLeft: SPACING.sm,
+    dropdownText: {
         flex: 1,
-        fontStyle: 'italic',
-    },
-    customerInfoCard: {
-        margin: SPACING.xl,
-        backgroundColor: COLORS.success + '10',
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        borderWidth: 1,
-        borderColor: COLORS.success + '40',
-        ...SHADOWS.sm,
-    },
-    customerInfoHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: SPACING.base,
-    },
-    customerInfoTitle: {
         fontSize: TYPOGRAPHY.fontSizes.base,
-        fontWeight: TYPOGRAPHY.fontWeights.semibold,
-        color: COLORS.success + 'CC',
-        marginLeft: SPACING.sm,
-    },
-    customerInfoRow: {
-        flexDirection: 'row',
-        marginBottom: SPACING.xs,
-        alignItems: 'flex-start',
-    },
-    customerInfoLabel: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        color: COLORS.textSecondary,
-        width: 100,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-    },
-    customerInfoValue: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
         color: COLORS.textPrimary,
-        flex: 1,
+        paddingVertical: SPACING.sm,
     },
-    currencySymbol: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-        marginRight: SPACING.sm,
+    dropdownPlaceholder: {
+        color: COLORS.textTertiary,
     },
     errorText: {
         fontSize: TYPOGRAPHY.fontSizes.xs,
@@ -1346,33 +1644,6 @@ const styles = StyleSheet.create({
         marginTop: SPACING.xs,
         marginLeft: SPACING.xs,
         fontWeight: TYPOGRAPHY.fontWeights.medium,
-    },
-    amountsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-    },
-    amountCard: {
-        width: (width - SPACING.xl * 2 - SPACING.base * 2) / 3,
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        marginBottom: SPACING.base,
-    },
-    amountCardSelected: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    amountText: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-    },
-    amountTextSelected: {
-        color: COLORS.textInverse,
     },
     summaryCard: {
         margin: SPACING.xl,
@@ -1423,6 +1694,50 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.primary,
     },
+    infoCard: {
+        flexDirection: 'row',
+        margin: SPACING.xl,
+        backgroundColor: COLORS.info + '10',
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        borderWidth: 1,
+        borderColor: COLORS.info + '30',
+    },
+    infoContent: {
+        flex: 1,
+        marginLeft: SPACING.sm,
+    },
+    infoTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.info,
+        marginBottom: SPACING.xs,
+    },
+    infoText: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.info,
+        lineHeight: TYPOGRAPHY.fontSizes.xs * 1.4,
+    },
+    warningCard: {
+        flexDirection: 'row',
+        margin: SPACING.xl,
+        backgroundColor: COLORS.warning + '10',
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        borderWidth: 1,
+        borderColor: COLORS.warning + '30',
+    },
+    warningTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.warning,
+        marginBottom: SPACING.xs,
+    },
+    warningText: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.warning,
+        lineHeight: TYPOGRAPHY.fontSizes.xs * 1.4,
+    },
     paymentButton: {
         backgroundColor: COLORS.primary,
         borderRadius: RADIUS.lg,
@@ -1444,6 +1759,84 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
     },
+    loadingButtonContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Dropdown Modal Styles
+    dropdownModalContent: {
+        backgroundColor: COLORS.background,
+        borderRadius: RADIUS.xl,
+        padding: 0,
+        width: '100%',
+        maxWidth: 400,
+        maxHeight: '80%',
+        ...SHADOWS.lg,
+    },
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.xs,
+        marginHorizontal: SPACING.xl,
+        marginBottom: SPACING.base,
+    },
+    searchIcon: {
+        marginRight: SPACING.sm,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        paddingVertical: SPACING.sm,
+        paddingHorizontal: 0,
+    },
+    optionsContainer: {
+        maxHeight: 400,
+        paddingHorizontal: SPACING.xl,
+        paddingBottom: SPACING.xl,
+    },
+    optionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: SPACING.base,
+        paddingHorizontal: SPACING.base,
+        borderRadius: RADIUS.base,
+        marginBottom: SPACING.xs,
+        backgroundColor: COLORS.backgroundSecondary,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    optionItemSelected: {
+        backgroundColor: COLORS.primaryBackground,
+        borderColor: COLORS.primary,
+    },
+    optionText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        flex: 1,
+    },
+    optionTextSelected: {
+        color: COLORS.primary,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+    },
+    noOptionsContainer: {
+        alignItems: 'center',
+        paddingVertical: SPACING.xl,
+    },
+    noOptionsText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textTertiary,
+        fontStyle: 'italic',
+    },
+    // Security Modal Styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
