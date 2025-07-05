@@ -1,4 +1,4 @@
-// app/bills/bulk-sms.tsx - Updated with React Native TextInput
+// app/bills/bulk-sms.tsx - Updated with VTPass SMS DND Route
 import React, { useState } from 'react';
 import {
     StyleSheet,
@@ -48,13 +48,34 @@ const SMS_UNIT_PRICE = 4; // ₦4 per SMS unit
 
 export default function BulkSMSScreen() {
     const router = useRouter();
-    const [selectedUnits, setSelectedUnits] = useState<number | null>(null);
-    const [recipientCount, setRecipientCount] = useState<number>(0);
-    const [messageLength, setMessageLength] = useState<number>(0);
-    const [estimatedCost, setEstimatedCost] = useState<number>(0);
+    const [selectedUnits, setSelectedUnits] = useState(null);
+    const [recipientCount, setRecipientCount] = useState(0);
+    const [messageLength, setMessageLength] = useState(0);
+    const [estimatedCost, setEstimatedCost] = useState(0);
 
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
     const [payBill, { isLoading }] = usePayBillMutation();
+
+    // const formatCurrency = (amount) => {
+    //     return new Intl.NumberFormat('en-NG', {
+    //         style: 'currency',
+    //         currency: 'NGN',
+    //         minimumFractionDigits: 0,
+    //     }).format(amount);
+    // };
+
+    // const calculateSMSCost = (recipients, message) => {
+    //     const numbers = recipients.split(/[,\n]/).map(num => num.trim()).filter(num => num && /^[0-9]{11}$/.test(num));
+    //     const recipientCount = numbers.length;
+    //     const messagePages = Math.ceil(message.length / 160) || 1;
+    //     const totalUnits = recipientCount * messagePages;
+    //     const cost = totalUnits * SMS_UNIT_PRICE;
+    //
+    //     setRecipientCount(recipientCount);
+    //     setEstimatedCost(cost);
+    //
+    //     return { recipientCount, totalUnits, cost };
+    // };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-NG', {
@@ -77,7 +98,7 @@ export default function BulkSMSScreen() {
         return { recipientCount, totalUnits, cost };
     };
 
-    const handleSendSMS = async (values: any) => {
+    const handleSendSMS = async (values) => {
         const { recipientCount, totalUnits, cost } = calculateSMSCost(values.recipients, values.message);
 
         if (recipientCount === 0) {
@@ -99,28 +120,38 @@ export default function BulkSMSScreen() {
 
         Alert.alert(
             'Confirm SMS Sending',
-            `Send SMS to ${recipientCount} recipients?\nTotal Cost: ${formatCurrency(cost)}`,
+            `Send SMS to ${recipientCount} recipients?\nTotal Cost: ${formatCurrency(cost)}\nMessage: "${values.message.substring(0, 50)}${values.message.length > 50 ? '...' : ''}"`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
                     text: 'Send SMS',
                     onPress: async () => {
                         try {
-                            // Create the payload for SMS service
+                            console.log('Sending bulk SMS with values:', {
+                                recipientCount,
+                                messageLength: values.message.length,
+                                cost,
+                                sender: values.sender || 'Hovapay'
+                            });
+
+                            // Create the payload for SMS service using the existing payBill endpoint
                             const smsPayload = {
-                                serviceID: 'bulk-sms', // This would be your SMS service ID
+                                serviceID: 'bulk-sms',
                                 amount: cost,
-                                phone: values.recipients, // Send recipients as phone field
-                                billersCode: values.sender || 'Hovapay', // Use sender ID as billersCode
-                                variation_code: 'bulk-sms', // SMS service variation
+                                phone: values.recipients,
+                                billersCode: values.sender || 'Hovapay',
+                                variation_code: 'bulk-sms',
                                 request_id: `SMS_${Date.now()}`,
+                                recipients: values.recipients,
+                                message: values.message,
+                                sender: values.sender || 'Hovapay'
                             };
 
                             console.log('Sending SMS with payload:', smsPayload);
 
                             const result = await payBill(smsPayload).unwrap();
 
-                            console.log('SMS API result:', result);
+                            console.log('Bulk SMS API result:', result);
 
                             // Refetch wallet balance after successful transaction
                             await refetchWallet();
@@ -151,15 +182,15 @@ export default function BulkSMSScreen() {
                                     }
                                 ]
                             );
-                        } catch (error: any) {
-                            console.error('SMS sending error:', error);
+                        } catch (error) {
+                            console.error('Bulk SMS sending error:', error);
 
                             let errorMessage = 'Something went wrong. Please try again.';
 
                             if (error.status) {
                                 switch (error.status) {
                                     case 400:
-                                        errorMessage = 'Invalid request. Please check your inputs.';
+                                        errorMessage = error.data?.message || 'Invalid request. Please check your inputs.';
                                         break;
                                     case 401:
                                         errorMessage = 'Authentication failed. Please login again.';
@@ -195,13 +226,96 @@ export default function BulkSMSScreen() {
         );
     };
 
-    const handleQuickUnitSelect = (units: number, setFieldValue: any) => {
+    const handleQuickUnitSelect = (units, setFieldValue) => {
         setSelectedUnits(units);
         // Don't reset form inputs, just calculate based on selected units
         // This allows users to use quick purchase without losing their message/recipients
     };
 
-    const renderQuickUnit = (units: number, setFieldValue: any) => (
+    const handleQuickPurchase = async () => {
+        if (!selectedUnits) return;
+
+        const cost = selectedUnits * SMS_UNIT_PRICE;
+
+        if (walletData && cost > walletData.data.balance) {
+            Alert.alert(
+                'Insufficient Balance',
+                `You need ${formatCurrency(cost)} but only have ${formatCurrency(walletData.data.balance)}. Please fund your wallet first.`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Fund Wallet', onPress: () => router.push('/wallet/fund') }
+                ]
+            );
+            return;
+        }
+
+        Alert.alert(
+            'Purchase SMS Units',
+            `Purchase ${selectedUnits} SMS units for ${formatCurrency(cost)}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Purchase',
+                    onPress: async () => {
+                        try {
+                            console.log('Purchasing SMS units:', {
+                                units: selectedUnits,
+                                cost
+                            });
+
+                            // Create the payload for SMS units service
+                            const unitsPayload = {
+                                serviceID: 'sms-units',
+                                amount: cost,
+                                phone: '08000000000', // Placeholder for units purchase
+                                variation_code: 'sms-units',
+                                request_id: `UNITS_${Date.now()}`,
+                            };
+
+                            const result = await payBill(unitsPayload).unwrap();
+
+                            console.log('SMS units purchase result:', result);
+
+                            await refetchWallet();
+                            setSelectedUnits(null);
+
+                            Alert.alert(
+                                'Purchase Successful!',
+                                `${selectedUnits} SMS units have been added to your account.\n\nTransaction Reference: ${result.data?.transactionRef || 'N/A'}`,
+                                [
+                                    {
+                                        text: 'View Receipt',
+                                        onPress: () => {
+                                            router.push({
+                                                pathname: '/bills/receipt',
+                                                params: {
+                                                    transactionRef: result.data?.transactionRef || `UNITS_${Date.now()}`,
+                                                    type: 'sms-units',
+                                                    phone: 'SMS Units',
+                                                    amount: cost.toString(),
+                                                    status: result.success ? 'successful' : 'failed',
+                                                    serviceName: 'SMS Units',
+                                                }
+                                            });
+                                        }
+                                    },
+                                    { text: 'OK' }
+                                ]
+                            );
+                        } catch (error) {
+                            console.error('SMS units purchase error:', error);
+                            Alert.alert(
+                                'Purchase Failed',
+                                error.data?.message || error.message || 'Unable to purchase units. Please try again.'
+                            );
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const renderQuickUnit = (units, setFieldValue) => (
         <TouchableOpacity
             key={units}
             style={[
@@ -285,7 +399,7 @@ export default function BulkSMSScreen() {
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Recipients</Text>
                                 <Text style={styles.sectionSubtitle}>
-                                    Enter phone numbers separated by commas or new lines
+                                    Enter phone numbers separated by commas or new lines (11 digits each)
                                 </Text>
                                 <View style={[
                                     styles.textAreaContainer,
@@ -319,6 +433,9 @@ export default function BulkSMSScreen() {
                             {/* Sender ID (Optional) */}
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Sender ID (Optional)</Text>
+                                <Text style={styles.sectionSubtitle}>
+                                    Custom sender name (max 11 characters). Leave blank to use "Hovapay"
+                                </Text>
                                 <View style={[
                                     styles.inputContainer,
                                     touched.sender && errors.sender && styles.inputContainerError
@@ -390,52 +507,30 @@ export default function BulkSMSScreen() {
                             <View style={styles.section}>
                                 <Text style={styles.sectionTitle}>Quick Purchase (SMS Units)</Text>
                                 <Text style={styles.sectionSubtitle}>
-                                    Select units for quick purchase (doesn't affect your current message)
+                                    Purchase SMS units separately (doesn't affect your current message)
                                 </Text>
                                 <View style={styles.unitsGrid}>
                                     {quickUnits.map(units => renderQuickUnit(units, setFieldValue))}
                                 </View>
                                 {selectedUnits && (
                                     <TouchableOpacity
-                                        style={styles.quickPurchaseButton}
-                                        onPress={() => {
-                                            Alert.alert(
-                                                'Quick Purchase',
-                                                `Purchase ${selectedUnits} SMS units for ${formatCurrency(selectedUnits * SMS_UNIT_PRICE)}?`,
-                                                [
-                                                    { text: 'Cancel', style: 'cancel' },
-                                                    {
-                                                        text: 'Purchase',
-                                                        onPress: async () => {
-                                                            try {
-                                                                const quickPayload = {
-                                                                    serviceID: 'sms-units',
-                                                                    amount: selectedUnits * SMS_UNIT_PRICE,
-                                                                    phone: '08000000000', // Placeholder for units purchase
-                                                                    variation_code: 'sms-units',
-                                                                    request_id: `UNITS_${Date.now()}`,
-                                                                };
-
-                                                                await payBill(quickPayload).unwrap();
-                                                                await refetchWallet();
-                                                                setSelectedUnits(null);
-
-                                                                Alert.alert(
-                                                                    'Purchase Successful!',
-                                                                    `${selectedUnits} SMS units have been added to your account.`
-                                                                );
-                                                            } catch (error: any) {
-                                                                Alert.alert('Purchase Failed', error.message || 'Unable to purchase units');
-                                                            }
-                                                        }
-                                                    }
-                                                ]
-                                            );
-                                        }}
+                                        style={[
+                                            styles.quickPurchaseButton,
+                                            isLoading && styles.quickPurchaseButtonDisabled
+                                        ]}
+                                        onPress={handleQuickPurchase}
+                                        disabled={isLoading}
                                     >
-                                        <Text style={styles.quickPurchaseButtonText}>
-                                            Purchase {selectedUnits} Units - {formatCurrency(selectedUnits * SMS_UNIT_PRICE)}
-                                        </Text>
+                                        {isLoading ? (
+                                            <View style={styles.loadingContainer}>
+                                                <ActivityIndicator size="small" color={COLORS.textInverse} />
+                                                <Text style={styles.quickPurchaseButtonText}>Purchasing...</Text>
+                                            </View>
+                                        ) : (
+                                            <Text style={styles.quickPurchaseButtonText}>
+                                                Purchase {selectedUnits} Units - {formatCurrency(selectedUnits * SMS_UNIT_PRICE)}
+                                            </Text>
+                                        )}
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -479,7 +574,7 @@ export default function BulkSMSScreen() {
                                 {isLoading ? (
                                     <View style={styles.loadingContainer}>
                                         <ActivityIndicator size="small" color={COLORS.textInverse} />
-                                        <Text style={styles.sendButtonText}>Sending...</Text>
+                                        <Text style={styles.sendButtonText}>Sending SMS...</Text>
                                     </View>
                                 ) : (
                                     <Text style={styles.sendButtonText}>
@@ -534,12 +629,14 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.sm,
         color: COLORS.withOpacity(COLORS.textInverse, 0.8),
         marginBottom: SPACING.xs,
+        textAlign: 'center',
     },
     balanceAmount: {
         fontSize: TYPOGRAPHY.fontSizes.xl,
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.textInverse,
         marginBottom: SPACING.sm,
+        textAlign: 'center',
     },
     fundButton: {
         flexDirection: 'row',
@@ -713,6 +810,10 @@ const styles = StyleSheet.create({
         paddingVertical: SPACING.sm,
         alignItems: 'center',
         marginTop: SPACING.base,
+    },
+    quickPurchaseButtonDisabled: {
+        backgroundColor: COLORS.textTertiary,
+        opacity: 0.6,
     },
     quickPurchaseButtonText: {
         color: COLORS.textInverse,

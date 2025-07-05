@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const handleLogout = async (reason: string = 'user_initiated') => {
     try {
-        console.log(`Handling logout with reason: ${reason}`);
+        console.log(`Handling logout with reason:`, reason);
 
         // Store logout reason
         await AsyncStorage.setItem('lastLogoutReason', reason);

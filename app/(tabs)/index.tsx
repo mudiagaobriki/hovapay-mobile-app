@@ -440,7 +440,7 @@ export default function DashboardScreen() {
 
         {/* Main Content */}
         <ScrollView
-            style={styles.content}
+            style={styles.scrollContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -510,7 +510,7 @@ export default function DashboardScreen() {
             </View>
           {/*</View>*/}
         </LinearGradient>
-
+          <View style={styles.contentContainer}>
           {/* Quick Actions */}
           <View style={styles.section}>
             {/*<Text style={styles.sectionTitle}>Quick Actions</Text>*/}
@@ -696,7 +696,7 @@ export default function DashboardScreen() {
           <View style={styles.section}>
             <TouchableOpacity
                 style={styles.logoutButton}
-                onPress={handleLogout}
+                onPress={() => handleLogout('user_initiated')}
             >
               <MaterialIcons name="logout" size={20} color={COLORS.error} />
               <Text style={styles.logoutText}>Logout</Text>
@@ -704,6 +704,7 @@ export default function DashboardScreen() {
           </View>
 
           <View style={{ height: SPACING['4xl'] }} />
+          </View>
         </ScrollView>
       </SafeAreaView>
   );
@@ -712,7 +713,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.backgroundSecondary,
+    backgroundColor: COLORS.primary,
   },
   header: {
     paddingTop: SPACING.base,
@@ -1056,5 +1057,16 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     fontWeight: TYPOGRAPHY.fontWeights.medium,
     marginLeft: SPACING.sm,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  contentContainer: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: RADIUS['3xl'],
+    borderTopRightRadius: RADIUS['3xl'],
+    marginTop: -SPACING.xl,
+    paddingTop: SPACING.xl,
+    flex: 1,
   },
 });

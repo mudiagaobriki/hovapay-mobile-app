@@ -1076,7 +1076,7 @@ export default function ProfileScreen() {
                                 'Are you sure you want to logout?',
                                 [
                                     { text: 'Cancel', style: 'cancel' },
-                                    { text: 'Logout', onPress: handleLogout, style: 'destructive' }
+                                    { text: 'Logout', onPress: () => handleLogout('user_initiated'), style: 'destructive' }
                                 ]
                             );
                         }}
