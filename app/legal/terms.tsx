@@ -45,6 +45,7 @@ export default function TermsConditionsScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
             {/* Header */}
             <LinearGradient
@@ -68,7 +69,7 @@ export default function TermsConditionsScreen() {
             </LinearGradient>
 
             {/* Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentContainer}>
                 {/* Last Updated */}
                 <View style={styles.lastUpdated}>
                     <MaterialIcons name="update" size={16} color={COLORS.textTertiary} />
@@ -323,7 +324,7 @@ export default function TermsConditionsScreen() {
                                 <Text style={styles.contactText}>
                                     Legal Department{'\n'}
                                     Hovapay Limited{'\n'}
-                                    Lagos, Nigeria
+                                    Port Harcourt, Nigeria
                                 </Text>
                             </View>
                         </View>
@@ -344,6 +345,7 @@ export default function TermsConditionsScreen() {
                 </View>
 
                 <View style={{ height: SPACING['4xl'] }} />
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -356,7 +358,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -510,5 +512,16 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 18,
         marginBottom: SPACING.xs,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING['2xl'],
+        flex: 1,
     },
 });

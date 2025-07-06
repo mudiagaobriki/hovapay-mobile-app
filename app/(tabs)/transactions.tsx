@@ -499,7 +499,7 @@ export default function TransactionsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.backgroundSecondary,
+        backgroundColor: COLORS.primary,
         // paddingTop: SPACING["2xl"],
     },
     header: {
@@ -701,4 +701,5 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
     },
+
 });

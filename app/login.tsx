@@ -110,6 +110,11 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = () => {
+    console.log('Navigating to password recovery screen');
+    router.push('/password-recovery');
+  };
+
   return (
       <KeyboardAvoidingView
           style={styles.container}
@@ -211,7 +216,11 @@ export default function LoginScreen() {
                       )}
                     </View>
 
-                    <TouchableOpacity style={styles.forgotPassword}>
+                    <TouchableOpacity
+                        style={styles.forgotPassword}
+                        onPress={handleForgotPassword}
+                        activeOpacity={0.7}
+                    >
                       <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                     </TouchableOpacity>
 
@@ -355,6 +364,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginBottom: SPACING.xl,
     paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
   },
   forgotPasswordText: {
     fontSize: TYPOGRAPHY.fontSizes.sm,

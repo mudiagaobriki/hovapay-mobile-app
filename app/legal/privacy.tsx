@@ -45,6 +45,7 @@ export default function PrivacyPolicyScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
             {/* Header */}
             <LinearGradient
@@ -68,7 +69,7 @@ export default function PrivacyPolicyScreen() {
             </LinearGradient>
 
             {/* Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentContainer}>
                 {/* Last Updated */}
                 <View style={styles.lastUpdated}>
                     <MaterialIcons name="update" size={16} color={COLORS.textTertiary} />
@@ -284,7 +285,7 @@ export default function PrivacyPolicyScreen() {
                                 <Text style={styles.contactText}>
                                     Data Protection Officer{'\n'}
                                     Hovapay Limited{'\n'}
-                                    Lagos, Nigeria
+                                    Port Harcourt, Nigeria
                                 </Text>
                             </View>
                         </View>
@@ -302,6 +303,7 @@ export default function PrivacyPolicyScreen() {
                 </View>
 
                 <View style={{ height: SPACING['4xl'] }} />
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -314,7 +316,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -451,5 +453,16 @@ const styles = StyleSheet.create({
         color: COLORS.textTertiary,
         textAlign: 'center',
         lineHeight: 18,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING['2xl'],
+        flex: 1,
     },
 });

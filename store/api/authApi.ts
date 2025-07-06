@@ -1,4 +1,4 @@
-// store/api/authApi.ts
+// store/api/authApi.ts - Updated with new OTP endpoints
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '@/store';
 import { User } from '../slices/authSlice';
@@ -27,15 +27,65 @@ interface RegisterResponse {
   user: User;
 }
 
+interface OTPRequest {
+  username: string; // can be email, phone, or username
+}
+
+interface VerifyOTPRequest {
+  username: string;
+  otp: string;
+}
+
+interface ResetPasswordRequest {
+  resetToken: string;
+  password: string;
+}
+
+interface OTPResponse {
+  message: string;
+  channels?: {
+    email: boolean;
+    sms: boolean;
+  };
+  expiresAt?: string;
+}
+
+interface VerifyOTPResponse {
+  message: string;
+  resetToken: string;
+  user?: {
+    email: string;
+    firstName: string;
+  };
+}
+
+interface OTPServiceStatusResponse {
+  message: string;
+  services: {
+    email: {
+      available: boolean;
+      service: string;
+    };
+    sms: {
+      available: boolean;
+      service: string;
+    };
+  };
+}
+
 interface ApiError {
   message: string;
   details?: string[];
+  lockout?: boolean;
+  lockoutUntil?: string;
+  attemptsRemaining?: number;
 }
 
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
     baseUrl: 'https://hovapay-api.onrender.com/api', // Your backend URL
+    // baseUrl: 'http://192.168.0.144:3040/api', // Your backend URL
     prepareHeaders: (headers, { getState }) => {
       // Get the token from the state
       const token = (getState() as RootState).auth.token;
@@ -94,7 +144,81 @@ export const authApi = createApi({
         method: 'GET',
       }),
     }),
-    // Forgot password endpoints
+
+    // Enhanced OTP-based password reset endpoints
+    sendForgotPasswordOTPEnhanced: builder.mutation<OTPResponse, OTPRequest>({
+      query: (data) => ({
+        url: '/users/email/password-reset-otp-enhanced',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to send OTP',
+          details: response.data?.details,
+        };
+      },
+    }),
+
+    verifyResetOTPEnhanced: builder.mutation<VerifyOTPResponse, VerifyOTPRequest>({
+      query: (data) => ({
+        url: '/users/email/verify-reset-otp-enhanced',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'OTP verification failed',
+          details: response.data?.details,
+          lockout: response.data?.lockout,
+          lockoutUntil: response.data?.lockoutUntil,
+          attemptsRemaining: response.data?.attemptsRemaining,
+        };
+      },
+    }),
+
+    resetPassword: builder.mutation<{ message: string }, ResetPasswordRequest>({
+      query: (data) => ({
+        url: '/users/reset-password',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Password reset failed',
+          details: response.data?.details,
+        };
+      },
+    }),
+
+    // Account verification OTP
+    sendAccountVerificationOTP: builder.mutation<OTPResponse, { identifier: string }>({
+      query: (data) => ({
+        url: '/users/account-verification-otp',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to send verification OTP',
+          details: response.data?.details,
+        };
+      },
+    }),
+
+    // Get OTP service status
+    getOTPServiceStatus: builder.query<OTPServiceStatusResponse, void>({
+      query: () => ({
+        url: '/users/otp-service-status',
+        method: 'GET',
+      }),
+    }),
+
+    // Legacy endpoints (kept for backward compatibility)
     sendForgotPasswordOTP: builder.mutation<{ message: string }, { username: string }>({
       query: (data) => ({
         url: '/users/email/password-reset-otp',
@@ -102,6 +226,7 @@ export const authApi = createApi({
         body: data,
       }),
     }),
+
     verifyResetOTP: builder.mutation<{ message: string; resetToken: string }, { username: string; otp: string }>({
       query: (data) => ({
         url: '/users/email/verify-reset-otp',
@@ -109,13 +234,7 @@ export const authApi = createApi({
         body: data,
       }),
     }),
-    resetPassword: builder.mutation<{ message: string }, { resetToken: string; password: string }>({
-      query: (data) => ({
-        url: '/users/reset-password',
-        method: 'POST',
-        body: data,
-      }),
-    }),
+
     // Email verification
     resendVerificationEmail: builder.mutation<{ message: string }, { email: string }>({
       query: (data) => ({
@@ -132,8 +251,15 @@ export const {
   useRegisterMutation,
   useValidateUsernameMutation,
   useLogoutMutation,
+
+  // Enhanced OTP endpoints
+  useSendForgotPasswordOTPEnhancedMutation,
+  useVerifyResetOTPEnhancedMutation,
+  useResetPasswordMutation,
+
+  // Legacy endpoints (for backward compatibility)
   useSendForgotPasswordOTPMutation,
   useVerifyResetOTPMutation,
-  useResetPasswordMutation,
+
   useResendVerificationEmailMutation,
 } = authApi;

@@ -447,6 +447,7 @@ export default function ChangePasswordScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
             {/* Header */}
             <LinearGradient
@@ -465,9 +466,8 @@ export default function ChangePasswordScreen() {
                     <Text style={styles.headerDescription}>{getStepDescription()}</Text>
                 </View>
             </LinearGradient>
-
+            <View style={styles.contentContainer}>
             {/* Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Step Indicator */}
                 {renderStepIndicator()}
 
@@ -477,6 +477,8 @@ export default function ChangePasswordScreen() {
                     {currentStep === 'verify' && renderVerifyForm()}
                     {currentStep === 'reset' && renderResetForm()}
                 </View>
+
+            </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -489,7 +491,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -731,5 +733,16 @@ const styles = StyleSheet.create({
         color: COLORS.textSecondary,
         marginBottom: 2,
         lineHeight: 16,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING.sm,
+        flex: 1,
     },
 });

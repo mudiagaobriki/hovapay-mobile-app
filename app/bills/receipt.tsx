@@ -1568,7 +1568,7 @@ Powered by Hovapay
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
             {/* Header */}
             <LinearGradient
                 colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
@@ -1594,7 +1594,7 @@ Powered by Hovapay
             </LinearGradient>
 
             {/* Main Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentContainer} >
                 {/* Status Section */}
                 <View style={styles.statusSection}>
                     <View style={[
@@ -1738,7 +1738,7 @@ Powered by Hovapay
                         For support, contact us at support@hovapay.com
                     </Text>
                 </View>
-            </ScrollView>
+
 
             {/* Bottom Actions */}
             <View style={styles.bottomActions}>
@@ -1750,6 +1750,8 @@ Powered by Hovapay
                     <Text style={styles.homeButtonText}>Back to Home</Text>
                 </TouchableOpacity>
             </View>
+        </View>
+        </ScrollView>
         </SafeAreaView>
     );
 }
@@ -1757,7 +1759,7 @@ Powered by Hovapay
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.backgroundSecondary,
+        backgroundColor: COLORS.primary,
     },
     loadingContainer: {
         flex: 1,
@@ -1803,7 +1805,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -2001,5 +2003,16 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING.lg,
+        flex: 1,
     },
 });

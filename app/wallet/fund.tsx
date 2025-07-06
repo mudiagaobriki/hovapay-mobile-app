@@ -691,6 +691,7 @@ export default function FundWalletScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
 
             <LinearGradient
                 colors={[COLORS.primaryGradientStart || COLORS.primary, COLORS.primaryGradientEnd || COLORS.primary]}
@@ -718,8 +719,7 @@ export default function FundWalletScreen() {
                     )}
                 </View>
             </LinearGradient>
-
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentContainer}>
                 <Formik
                     initialValues={{ amount: selectedAmount?.toString() || '' }}
                     validationSchema={FundWalletSchema}
@@ -826,6 +826,7 @@ export default function FundWalletScreen() {
                     )}
                 </Formik>
                 <View style={{ height: 80 }} />
+                </View>
             </ScrollView>
 
             {renderPaymentWebView()}
@@ -837,11 +838,11 @@ export default function FundWalletScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: COLORS.primary,
     },
     header: {
         paddingTop: 16,
-        paddingBottom: 24,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: 24,
     },
     headerContent: {
@@ -1437,5 +1438,16 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         fontWeight: '600',
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING.sm,
+        flex: 1,
     },
 });

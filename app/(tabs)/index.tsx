@@ -714,6 +714,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primary,
+    paddingTop: SPACING.md
   },
   header: {
     paddingTop: SPACING.base,
@@ -1063,8 +1064,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     backgroundColor: COLORS.background,
-    borderTopLeftRadius: RADIUS['3xl'],
-    borderTopRightRadius: RADIUS['3xl'],
+    // borderTopLeftRadius: RADIUS['3xl'],
+    // borderTopRightRadius: RADIUS['3xl'],
     marginTop: -SPACING.xl,
     paddingTop: SPACING.xl,
     flex: 1,

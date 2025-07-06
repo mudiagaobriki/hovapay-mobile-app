@@ -72,6 +72,7 @@ export default function AboutHovapayScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
             {/* Header */}
             <LinearGradient
@@ -98,7 +99,7 @@ export default function AboutHovapayScreen() {
             </LinearGradient>
 
             {/* Content */}
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                <View style={styles.contentContainer}>
                 {/* Our Mission */}
                 {renderSection("Our Mission",
                     <Text style={styles.bodyText}>
@@ -295,7 +296,7 @@ export default function AboutHovapayScreen() {
                                 <MaterialIcons name="location-on" size={20} color={COLORS.primary} />
                                 <Text style={styles.contactText}>
                                     Hovapay Limited{'\n'}
-                                    Lagos, Nigeria
+                                    Port Harcourt, Nigeria
                                 </Text>
                             </View>
                         </View>
@@ -337,6 +338,7 @@ export default function AboutHovapayScreen() {
                 </View>
 
                 <View style={{ height: SPACING['4xl'] }} />
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -349,7 +351,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -640,5 +642,16 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 18,
         marginBottom: SPACING.xs,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING['2xl'],
+        flex: 1,
     },
 });

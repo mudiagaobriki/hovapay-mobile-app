@@ -898,8 +898,8 @@ export default function ProfileScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
             <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.scrollViewContent}
+                style={styles.scrollContainer}
+                // contentContainerStyle={styles.scrollViewContent}
                 showsVerticalScrollIndicator={false}
                 scrollEventThrottle={16}
                 keyboardShouldPersistTaps="handled"
@@ -928,6 +928,7 @@ export default function ProfileScreen() {
             </LinearGradient>
 
             {/* Content */}
+                <View style={styles.contentContainer}>
                 {/* Email Verification Banner */}
                 {renderEmailVerificationBanner()}
 
@@ -1087,6 +1088,7 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={{ height: SPACING['4xl'] }} />
+                </View>
             </ScrollView>
 
             {/* Edit Profile Modal - Fixed with proper basic details form */}
@@ -1403,7 +1405,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.backgroundSecondary,
+        backgroundColor: COLORS.primary,
+        paddingTop: SPACING.md,
     },
     scrollView: {
         flex: 1,
@@ -1941,5 +1944,16 @@ const styles = StyleSheet.create({
         color: COLORS.primary,
         fontWeight: TYPOGRAPHY.fontWeights.medium,
         marginLeft: SPACING.sm,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['3xl'],
+        // borderTopRightRadius: RADIUS['3xl'],
+        marginTop: -SPACING.xl,
+        paddingTop: SPACING.xl,
+        flex: 1,
     },
 });

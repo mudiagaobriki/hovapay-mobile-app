@@ -650,7 +650,7 @@ export default function ElectricityScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <LinearGradient
                     colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
@@ -672,7 +672,7 @@ export default function ElectricityScreen() {
                         </Text>
                     </View>
                 </LinearGradient>
-
+                <View style={styles.contentContainer} >
                 {/* Main Content */}
                 <Formik
                     initialValues={{
@@ -913,6 +913,7 @@ export default function ElectricityScreen() {
                         );
                     }}
                 </Formik>
+                </View>
             </ScrollView>
             <SecurityModal />
         </SafeAreaView>
@@ -922,11 +923,11 @@ export default function ElectricityScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.backgroundSecondary,
+        backgroundColor: COLORS.primary,
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -1386,5 +1387,16 @@ const styles = StyleSheet.create({
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         color: COLORS.textInverse,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING.sm,
+        flex: 1,
     },
 });

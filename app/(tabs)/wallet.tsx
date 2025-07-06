@@ -275,7 +275,7 @@ export default function WalletScreen() {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
             <ScrollView
-                style={styles.content}
+                style={styles.scrollContainer}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             >
@@ -333,7 +333,7 @@ export default function WalletScreen() {
                     </View>
                 </View>
             </LinearGradient>
-
+            <View style={styles.contentContainer}>
             {/* Main Content */}
                 {/* Virtual Account Card */}
                 {virtualAccountData?.data && (
@@ -414,6 +414,7 @@ export default function WalletScreen() {
                 {/*</View>*/}
 
                 <View style={{ height: SPACING['4xl'] }} />
+            </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
     },
     header: {
         paddingTop: SPACING.base,
-        paddingBottom: SPACING['2xl'],
+        paddingBottom: SPACING['2.5xl'],
         paddingHorizontal: SPACING.xl,
     },
     headerContent: {
@@ -774,5 +775,16 @@ const styles = StyleSheet.create({
         color: COLORS.textInverse,
         fontSize: TYPOGRAPHY.fontSizes.sm,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
+    },
+    scrollContainer: {
+        flex: 1,
+    },
+    contentContainer: {
+        backgroundColor: COLORS.background,
+        // borderTopLeftRadius: RADIUS['2xl'],
+        // borderTopRightRadius: RADIUS['2xl'],
+        marginTop: -SPACING.base,
+        paddingTop: SPACING.sm,
+        flex: 1,
     },
 });

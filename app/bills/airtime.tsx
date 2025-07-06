@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: SPACING.base,
-    paddingBottom: SPACING.xl,
+    paddingBottom: SPACING["2.5xl"],
     paddingHorizontal: SPACING.xl,
   },
   headerContent: {
@@ -1226,8 +1226,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     backgroundColor: COLORS.background,
-    borderTopLeftRadius: RADIUS['2xl'],
-    borderTopRightRadius: RADIUS['2xl'],
+    // borderTopLeftRadius: RADIUS['2xl'],
+    // borderTopRightRadius: RADIUS['2xl'],
     marginTop: -SPACING.base,
     paddingTop: SPACING.sm,
     flex: 1,

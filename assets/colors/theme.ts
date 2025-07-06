@@ -125,6 +125,8 @@ export const SPACING = {
     '2xl': 32,
     '3xl': 48,
     '4xl': 64,
+    // '1.5xl': 40,
+    '2.5xl': 40,
 };
 
 // Border radius scale
