@@ -861,6 +861,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.primary,
+    paddingTop: SPACING.md
   },
   header: {
     paddingTop: SPACING.base,

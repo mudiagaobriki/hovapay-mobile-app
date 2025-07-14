@@ -1,4 +1,4 @@
-// store/api/authApi.ts - Updated with new OTP endpoints
+// store/api/authApi.ts - Enhanced with biometric login support
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '@/store';
 import { User } from '../slices/authSlice';
@@ -6,6 +6,13 @@ import { User } from '../slices/authSlice';
 interface LoginRequest {
   email: string; // can be username, email, or phone (your backend uses 'email' field)
   password: string;
+}
+
+interface BiometricLoginRequest {
+  identifier: string; // email, username, or phone
+  biometricType: string; // 'Face ID', 'Fingerprint', etc.
+  deviceId: string;
+  biometricData?: string; // Optional biometric signature/hash
 }
 
 interface RegisterRequest {
@@ -81,6 +88,19 @@ interface ApiError {
   attemptsRemaining?: number;
 }
 
+interface BiometricSetupRequest {
+  biometricType: string;
+  deviceId: string;
+  deviceName?: string;
+  biometricData?: string;
+}
+
+interface BiometricValidationRequest {
+  identifier: string;
+  biometricType: string;
+  deviceId: string;
+}
+
 export const authApi = createApi({
   reducerPath: 'authApi',
   baseQuery: fetchBaseQuery({
@@ -101,7 +121,7 @@ export const authApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['User'],
+  tagTypes: ['User', 'BiometricAuth'],
   endpoints: (builder) => ({
     login: builder.mutation<AuthResponse, LoginRequest>({
       query: (credentials) => ({
@@ -116,7 +136,75 @@ export const authApi = createApi({
           details: response.data?.details,
         };
       },
+      invalidatesTags: ['User'],
     }),
+
+    // New biometric login endpoint
+    biometricLogin: builder.mutation<AuthResponse, BiometricLoginRequest>({
+      query: (credentials) => ({
+        url: '/users/biometric-login',
+        method: 'POST',
+        body: credentials,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Biometric login failed',
+          details: response.data?.details,
+        };
+      },
+      invalidatesTags: ['User', 'BiometricAuth'],
+    }),
+
+    // Check if user can use biometric login
+    checkBiometricEligibility: builder.mutation<{ eligible: boolean; biometricType?: string; reason?: string }, { identifier: string }>({
+      query: (data) => ({
+        url: '/users/check-biometric-eligibility',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to check biometric eligibility',
+          details: response.data?.details,
+        };
+      },
+    }),
+
+    // Setup biometric authentication after successful login
+    setupBiometricAuth: builder.mutation<{ message: string; success: boolean }, BiometricSetupRequest>({
+      query: (data) => ({
+        url: '/users/setup-biometric',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to setup biometric authentication',
+          details: response.data?.details,
+        };
+      },
+      invalidatesTags: ['BiometricAuth', 'User'],
+    }),
+
+    // Validate biometric data before login
+    validateBiometricAuth: builder.mutation<{ valid: boolean; user?: Partial<User> }, BiometricValidationRequest>({
+      query: (data) => ({
+        url: '/users/validate-biometric',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Biometric validation failed',
+          details: response.data?.details,
+        };
+      },
+    }),
+
     register: builder.mutation<RegisterResponse, RegisterRequest>({
       query: (userData) => ({
         url: '/users/register',
@@ -248,6 +336,10 @@ export const authApi = createApi({
 
 export const {
   useLoginMutation,
+  useBiometricLoginMutation,
+  useCheckBiometricEligibilityMutation,
+  useSetupBiometricAuthMutation,
+  useValidateBiometricAuthMutation,
   useRegisterMutation,
   useValidateUsernameMutation,
   useLogoutMutation,
@@ -262,4 +354,6 @@ export const {
   useVerifyResetOTPMutation,
 
   useResendVerificationEmailMutation,
+  useSendAccountVerificationOTPMutation,
+  useGetOTPServiceStatusQuery,
 } = authApi;
