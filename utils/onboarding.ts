@@ -17,6 +17,7 @@ export const isOnboardingCompleted = async (): Promise<boolean> => {
     try {
         const completed = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
         return completed === 'true';
+        // return false
     } catch (error) {
         console.error('❌ Failed to check onboarding status:', error);
         return false;

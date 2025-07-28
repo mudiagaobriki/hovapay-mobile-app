@@ -1,4 +1,4 @@
-// app/_layout.tsx - Simplified to prevent loops
+// app/_layout.tsx - Fixed to prevent double login navigation
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Redirect, Stack, usePathname, useSegments } from 'expo-router';
@@ -19,7 +19,7 @@ import BiometricService from '../utils/BiometricService';
 
 const ONBOARDING_STORAGE_KEY = '@solo_bills_onboarding_completed';
 
-// Simplified auth guard
+// Simplified auth guard with logout handling
 function AuthGuard({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAppSelector(selectIsAuthenticated);
     const currentUser = useAppSelector(selectCurrentUser);
@@ -29,6 +29,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
     const [biometricsReady, setBiometricsReady] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [lastLogoutHandled, setLastLogoutHandled] = useState(false);
 
     const protectedRoutes = ['(tabs)', 'bills', 'wallet'];
     const isInProtectedRoute = protectedRoutes.includes(segments[0]);
@@ -100,7 +101,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // Check logout reason when authentication changes
     useEffect(() => {
-        if (!isAuthenticated && !isLoading) {
+        if (!isAuthenticated && !isLoading && !lastLogoutHandled) {
             const checkLastLogout = async () => {
                 try {
                     const lastLogoutReason = await getLastLogoutReason();
@@ -124,14 +125,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
                         Alert.alert('🔒 Session Ended', message, [{ text: 'OK' }]);
                     }
+                    setLastLogoutHandled(true);
                 } catch (error) {
                     console.error('Error checking logout reason:', error);
+                    setLastLogoutHandled(true);
                 }
             };
 
             checkLastLogout();
         }
-    }, [isAuthenticated, isLoading]);
+    }, [isAuthenticated, isLoading, lastLogoutHandled]);
+
+    // Reset logout handled flag when user becomes authenticated again
+    useEffect(() => {
+        if (isAuthenticated) {
+            setLastLogoutHandled(false);
+        }
+    }, [isAuthenticated]);
 
     // Show loading while initializing
     if (isLoading || onboardingCompleted === null) {
@@ -144,8 +154,20 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
         isAuthenticated,
         onboardingCompleted,
         pathname,
-        isInProtectedRoute
+        isInProtectedRoute,
+        segments: segments[0]
     });
+
+    // Skip splash screen navigation after logout - go directly to appropriate screen
+    if (!isAuthenticated && pathname === '/splash') {
+        if (onboardingCompleted) {
+            console.log('🔐 Post-logout: Redirecting to login (skipping splash)');
+            return <Redirect href="/login" />;
+        } else {
+            console.log('🎯 Post-logout: Redirecting to onboarding (skipping splash)');
+            return <Redirect href="/onboarding" />;
+        }
+    }
 
     // Show onboarding for first-time users
     if (!onboardingCompleted && !isAuthenticated && pathname !== '/onboarding') {
@@ -191,7 +213,7 @@ export default function RootLayout() {
                     <SecurityProvider>
                         <AuthGuard>
                             <Stack
-                                initialRouteName="splash"
+                                initialRouteName="login"
                                 screenOptions={{
                                     headerShown: false,
                                     animation: 'slide_from_right',

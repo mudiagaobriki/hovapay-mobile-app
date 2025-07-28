@@ -38,6 +38,55 @@ export default function RegisterScreen() {
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
+  // Function to format Nigerian phone number
+  const formatNigerianPhone = (phone: string): string => {
+    // Remove all non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    // If starts with 234, it's already in international format
+    if (cleanPhone.startsWith('234')) {
+      return `+${cleanPhone}`;
+    }
+
+    // If starts with 0, remove it and add country code
+    if (cleanPhone.startsWith('0')) {
+      return `+234${cleanPhone.substring(1)}`;
+    }
+
+    // If it's 10 digits without leading 0, add country code
+    if (cleanPhone.length === 10) {
+      return `+234${cleanPhone}`;
+    }
+
+    // If it's 11 digits starting with 0, format correctly
+    if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+      return `+234${cleanPhone.substring(1)}`;
+    }
+
+    // Return as is if already properly formatted
+    return cleanPhone;
+  };
+
+  // Validation for Nigerian phone numbers
+  const validateNigerianPhone = (phone: string): boolean => {
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    // Check if it's a valid Nigerian number format
+    if (cleanPhone.startsWith('234') && cleanPhone.length === 13) {
+      return true;
+    }
+
+    if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+      return true;
+    }
+
+    if (!cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+      return true;
+    }
+
+    return false;
+  };
+
   const RegisterSchema = Yup.object().shape({
     username: Yup.string()
         .min(3, 'Username must be at least 3 characters')
@@ -46,7 +95,10 @@ export default function RegisterScreen() {
         .email('Please enter a valid email address')
         .required('Email is required'),
     phone: Yup.string()
-        .matches(/^\+?[1-9]\d{1,14}$/, 'Please enter a valid phone number')
+        .test('nigerian-phone', 'Please enter a valid Nigerian phone number', function(value) {
+          if (!value) return false;
+          return validateNigerianPhone(value);
+        })
         .required('Phone number is required'),
     password: Yup.string()
         .min(8, 'Password must be at least 8 characters')
@@ -63,10 +115,14 @@ export default function RegisterScreen() {
   const handleRegister = async (values: any, { setSubmitting }: any) => {
     try {
       const { username, email, phone, password } = values;
+
+      // Format phone number before sending
+      const formattedPhone = formatNigerianPhone(phone);
+
       const result = await register({
         username,
         email,
-        phone,
+        phone: formattedPhone,
         password,
         type: 'user' // Required by your backend
       }).unwrap();
@@ -74,7 +130,7 @@ export default function RegisterScreen() {
       // Show success message about email verification
       Alert.alert(
           'Registration Successful',
-          'Please check your email to verify your account before signing in.',
+          'Please sign in.',
           [
             {
               text: 'OK',
@@ -230,6 +286,9 @@ export default function RegisterScreen() {
                         {touched.phone && errors.phone && (
                             <Text style={styles.errorText}>{errors.phone}</Text>
                         )}
+                        <Text style={styles.helperText}>
+                          Enter your Nigerian phone number (with or without +234)
+                        </Text>
                       </View>
 
                       <View style={styles.inputWrapper}>
@@ -311,6 +370,76 @@ export default function RegisterScreen() {
                         {touched.confirmPassword && errors.confirmPassword && (
                             <Text style={styles.errorText}>{errors.confirmPassword}</Text>
                         )}
+                      </View>
+
+                      {/* Password Requirements - Same as recovery screen */}
+                      <View style={styles.requirementsContainer}>
+                        <Text style={styles.requirementsTitle}>Password must contain:</Text>
+                        <View style={styles.requirementItem}>
+                          <MaterialIcons
+                              name={(values.password?.length || 0) >= 8 ? "check-circle" : "radio-button-unchecked"}
+                              size={16}
+                              color={(values.password?.length || 0) >= 8 ? COLORS.success : COLORS.textTertiary}
+                          />
+                          <Text style={[
+                            styles.requirementText,
+                            (values.password?.length || 0) >= 8 && styles.requirementTextValid
+                          ]}>
+                            At least 8 characters
+                          </Text>
+                        </View>
+                        <View style={styles.requirementItem}>
+                          <MaterialIcons
+                              name={/[A-Z]/.test(values.password || '') ? "check-circle" : "radio-button-unchecked"}
+                              size={16}
+                              color={/[A-Z]/.test(values.password || '') ? COLORS.success : COLORS.textTertiary}
+                          />
+                          <Text style={[
+                            styles.requirementText,
+                            /[A-Z]/.test(values.password || '') && styles.requirementTextValid
+                          ]}>
+                            One uppercase letter
+                          </Text>
+                        </View>
+                        <View style={styles.requirementItem}>
+                          <MaterialIcons
+                              name={/[a-z]/.test(values.password || '') ? "check-circle" : "radio-button-unchecked"}
+                              size={16}
+                              color={/[a-z]/.test(values.password || '') ? COLORS.success : COLORS.textTertiary}
+                          />
+                          <Text style={[
+                            styles.requirementText,
+                            /[a-z]/.test(values.password || '') && styles.requirementTextValid
+                          ]}>
+                            One lowercase letter
+                          </Text>
+                        </View>
+                        <View style={styles.requirementItem}>
+                          <MaterialIcons
+                              name={/\d/.test(values.password || '') ? "check-circle" : "radio-button-unchecked"}
+                              size={16}
+                              color={/\d/.test(values.password || '') ? COLORS.success : COLORS.textTertiary}
+                          />
+                          <Text style={[
+                            styles.requirementText,
+                            /\d/.test(values.password || '') && styles.requirementTextValid
+                          ]}>
+                            One number
+                          </Text>
+                        </View>
+                        <View style={styles.requirementItem}>
+                          <MaterialIcons
+                              name={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(values.password || '') ? "check-circle" : "radio-button-unchecked"}
+                              size={16}
+                              color={/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(values.password || '') ? COLORS.success : COLORS.textTertiary}
+                          />
+                          <Text style={[
+                            styles.requirementText,
+                            /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(values.password || '') && styles.requirementTextValid
+                          ]}>
+                            One special character
+                          </Text>
+                        </View>
                       </View>
 
                       <TouchableOpacity
@@ -452,6 +581,39 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     marginLeft: SPACING.xs,
     fontWeight: TYPOGRAPHY.fontWeights.medium,
+  },
+  helperText: {
+    fontSize: TYPOGRAPHY.fontSizes.xs,
+    color: COLORS.textTertiary,
+    marginTop: SPACING.xs,
+    marginLeft: SPACING.xs,
+    fontStyle: 'italic',
+  },
+  // Password Requirements - Same as recovery screen
+  requirementsContainer: {
+    backgroundColor: COLORS.backgroundSecondary,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.base,
+    marginBottom: SPACING.xl,
+  },
+  requirementsTitle: {
+    fontSize: TYPOGRAPHY.fontSizes.sm,
+    fontWeight: TYPOGRAPHY.fontWeights.semibold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
+  requirementItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  requirementText: {
+    fontSize: TYPOGRAPHY.fontSizes.xs,
+    color: COLORS.textTertiary,
+    marginLeft: SPACING.sm,
+  },
+  requirementTextValid: {
+    color: COLORS.success,
   },
   registerButton: {
     backgroundColor: COLORS.primary,

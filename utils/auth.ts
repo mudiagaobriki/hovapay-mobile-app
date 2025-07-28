@@ -6,23 +6,25 @@ import { persistor } from '@/store';
 import { authSecurityManager } from '@/utils/authSecurity';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 export const handleLogout = async (reason: string = 'user_initiated') => {
     try {
-        console.log(`Handling logout with reason:`, reason);
+        console.log(`🚪 Handling logout with reason:`, reason);
 
-        // Store logout reason
+        // Store logout reason for the layout to handle
         await AsyncStorage.setItem('lastLogoutReason', reason);
         await AsyncStorage.setItem('lastLogoutTime', Date.now().toString());
 
         const state = store.getState();
         const userEmail = state.auth.user?.email;
 
-        // Call logout API if user email exists
+        // Call logout API if user email exists (optional - don't block on this)
         if (userEmail) {
             try {
                 await store.dispatch(authApi.endpoints.logout.initiate({ email: userEmail }));
+                console.log('📡 Logout API call successful');
             } catch (error) {
-                console.warn('Logout API call failed:', error);
+                console.warn('⚠️ Logout API call failed:', error);
                 // Continue with local logout even if API fails
             }
         }
@@ -30,7 +32,7 @@ export const handleLogout = async (reason: string = 'user_initiated') => {
         // Clean up security manager
         authSecurityManager.cleanup();
 
-        // Clear Redux state
+        // Clear Redux state - this will trigger layout navigation logic
         store.dispatch(logout());
 
         // Clear RTK Query cache
@@ -46,12 +48,20 @@ export const handleLogout = async (reason: string = 'user_initiated') => {
             'lastActivity'
         ]);
 
-        console.log('Logout successful');
+        console.log('✅ Logout successful - layout will handle navigation');
+
+        // Don't navigate here - let the layout handle it
+        // This prevents the double navigation issue
+
     } catch (error) {
-        console.error('Logout error:', error);
+        console.error('❌ Logout error:', error);
         // Force local logout even if there's an error
         store.dispatch(logout());
-        await persistor.purge();
+        try {
+            await persistor.purge();
+        } catch (purgeError) {
+            console.warn('⚠️ Failed to purge data:', purgeError);
+        }
     }
 };
 

@@ -12,23 +12,40 @@ export default function SplashScreen() {
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const [isNavigating, setIsNavigating] = useState(false);
 
+  // 🧪 SIMPLE TESTING TOGGLE - Just change this boolean
+  const FORCE_ONBOARDING = false; // Set to true to always test onboarding
+
   useEffect(() => {
     const handleNavigation = async () => {
       if (isNavigating) return; // Prevent multiple navigations
 
       try {
-        // Wait a bit for a better user experience
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Minimal delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         setIsNavigating(true);
 
+        // 🧪 TESTING: Force onboarding if enabled
+        if (FORCE_ONBOARDING) {
+          console.log('🧪 Testing mode: forcing onboarding');
+          // Clear onboarding status so it can be tested repeatedly
+          try {
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            await AsyncStorage.removeItem('onboarding_completed');
+          } catch (error) {
+            console.warn('Could not clear onboarding status:', error);
+          }
+          router.replace('/onboarding');
+          return;
+        }
+
+        // NORMAL PRODUCTION LOGIC
         if (isAuthenticated) {
           console.log('👤 User is authenticated, navigating to dashboard');
           router.replace('/(tabs)');
         } else {
           // Check if onboarding has been completed
           const onboardingDone = await isOnboardingCompleted();
-          // const onboardingDone = false;
 
           if (onboardingDone) {
             console.log('📋 Onboarding completed, navigating to login');

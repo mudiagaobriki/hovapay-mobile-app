@@ -24,7 +24,7 @@ interface OnboardingSlide {
     title: string;
     subtitle: string;
     description: string;
-    image: any; // Replace with your actual image paths
+    image: any;
     backgroundColor: string;
     gradientColors: string[];
 }
@@ -35,7 +35,7 @@ const slides: OnboardingSlide[] = [
         title: 'Fast. Reliable.',
         subtitle: 'Everywhere',
         description: 'Experience the convenience of paying bills anytime, anywhere with instant value on every transaction with our app',
-        image: require('@/assets/images/intro-convenience.jpg'), // Replace with your brighter image
+        image: require('@/assets/images/intro-convenience.jpg'),
         backgroundColor: '#0b3d6f',
         gradientColors: ['#0b3d6f', '#1e5a8a'],
     },
@@ -44,7 +44,7 @@ const slides: OnboardingSlide[] = [
         title: 'Secure',
         subtitle: 'Transactions',
         description: 'We use industry-leading security measures to protect your financial data',
-        image: require('@/assets/images/intro-security.jpg'), // Replace with image of cute Black man with phone
+        image: require('@/assets/images/intro-security.jpg'),
         backgroundColor: '#0b3d6f',
         gradientColors: ['#0b3d6f', '#1a4971'],
     },
@@ -122,12 +122,10 @@ export default function OnboardingScreen() {
                         {/* Image Container */}
                         <View style={styles.imageContainer}>
                             <View style={styles.imagePlaceholder}>
-                                {/* Replace this with your actual Image component */}
                                 <Image
                                     source={item.image}
                                     style={styles.image}
                                     resizeMode="cover"
-                                    defaultSource={require('@/assets/images/placeholder.jpg')}
                                 />
                             </View>
                         </View>
@@ -273,7 +271,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
-        overflow: 'hidden', // This ensures images don't exceed container bounds
+        overflow: 'hidden',
         ...SHADOWS.lg,
     },
     image: {

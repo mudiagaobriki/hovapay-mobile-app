@@ -284,41 +284,44 @@ export default function LoginScreen() {
   };
 
   return (
-      <KeyboardAvoidingView
-          style={styles.container}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-        <ScrollView
-            style={styles.scrollContainer}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scrollContentContainer}
+        <LinearGradient
+            colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
+            style={styles.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
         >
-          <LinearGradient
-              colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
-              style={styles.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.headerContainer}>
-              <View style={styles.logoContainer}>
-                <View style={styles.logoCircle}>
-                  <Image
-                      source={require('@/assets/images/splash-icon.png')}
-                      style={styles.logoIcon}
-                      resizeMode="contain"
-                      onError={(error) => console.log('Image load error:', error)}
-                      defaultSource={require('@/assets/images/placeholder.jpg')}
-                  />
-                </View>
+          {/* Fixed Header */}
+          <View style={styles.headerContainer}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Image
+                    source={require('@/assets/images/splash-icon.png')}
+                    style={styles.logoIcon}
+                    resizeMode="contain"
+                    onError={(error) => console.log('Image load error:', error)}
+                />
               </View>
-              <Text style={styles.welcomeText}>Welcome Back</Text>
-              <Text style={styles.subtitleText}>Sign in to your account</Text>
             </View>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.subtitleText}>Sign in to your account</Text>
+          </View>
 
-            <View style={styles.formContainer}>
+          {/* Scrollable Form */}
+          <KeyboardAvoidingView
+              style={styles.keyboardAvoidingView}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <ScrollView
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.formContentContainer}
+                bounces={false}
+            >
               <Formik
                   initialValues={{
                     identifier: biometricUserData?.lastUsedIdentifier || '',
@@ -329,7 +332,7 @@ export default function LoginScreen() {
                   enableReinitialize={true}
               >
                 {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting, setFieldValue }) => (
-                    <>
+                    <View style={styles.formContent}>
                       <View style={styles.inputWrapper}>
                         <View style={[
                           styles.inputContainer,
@@ -428,7 +431,7 @@ export default function LoginScreen() {
                           activeOpacity={0.8}
                       >
                         {isLoading || isSubmitting ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <View style={styles.loadingContainer}>
                               <ActivityIndicator color={COLORS.textInverse} size="small" />
                               <Text style={[styles.loginButtonText, { marginLeft: 8 }]}>
                                 Signing In...
@@ -486,30 +489,30 @@ export default function LoginScreen() {
                             </Text>
                           </View>
                       )}
-                    </>
+
+                      <View style={styles.divider}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>or</Text>
+                        <View style={styles.dividerLine} />
+                      </View>
+
+                      <View style={styles.footer}>
+                        <Text style={styles.footerText}>Don't have an account? </Text>
+                        <TouchableOpacity
+                            onPress={() => router.push('/register')}
+                            style={styles.linkContainer}
+                            activeOpacity={0.7}
+                        >
+                          <Text style={styles.linkText}>Sign Up</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                 )}
               </Formik>
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
-                <TouchableOpacity
-                    onPress={() => router.push('/register')}
-                    style={styles.linkContainer}
-                    activeOpacity={0.7}
-                >
-                  <Text style={styles.linkText}>Sign Up</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </LinearGradient>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </LinearGradient>
+      </View>
   );
 }
 
@@ -518,21 +521,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.primary,
   },
-  scrollContainer: {
+  gradient: {
     flex: 1,
   },
-  scrollContentContainer: {
-    flexGrow: 1,
-  },
-  gradient: {
-    minHeight: height, // Ensure gradient covers full screen height
-  },
   headerContainer: {
-    minHeight: height * 0.40, // Use minHeight instead of flex
-    justifyContent: 'center',
-    alignItems: 'center',
     paddingTop: Platform.OS === 'ios' ? SPACING['4xl'] : SPACING['3xl'],
+    paddingBottom: SPACING.lg,
     paddingHorizontal: SPACING.xl,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   logoContainer: {
     marginBottom: SPACING.xl,
@@ -549,7 +546,6 @@ const styles = StyleSheet.create({
   logoIcon: {
     width: 48,
     height: 48,
-    // Removed tintColor - this was likely causing the display issue
   },
   welcomeText: {
     fontSize: TYPOGRAPHY.fontSizes['4xl'],
@@ -565,18 +561,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.fontSizes.base * 1.3,
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   formContainer: {
-    flex: 1, // Take up remaining space
+    flex: 1,
     backgroundColor: COLORS.background,
     borderTopLeftRadius: RADIUS['3xl'],
     borderTopRightRadius: RADIUS['3xl'],
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING['3xl'],
-    paddingBottom: SPACING['4xl'], // Extra bottom padding for scrolling
-    ...SHADOWS.lg,
+  },
+  formContentContainer: {
+    flexGrow: 1,
+    paddingBottom: SPACING['4xl'],
+  },
+  formContent: {
+    padding: SPACING.xl,
   },
   inputWrapper: {
-    marginBottom: SPACING.lg, // Restored original spacing
+    marginBottom: SPACING.lg,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -614,7 +616,7 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: SPACING.xl, // Restored original spacing
+    marginBottom: SPACING.xl,
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
   },
@@ -629,7 +631,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.base,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.lg, // Restored original spacing
+    marginBottom: SPACING.lg,
     minHeight: 56,
     ...SHADOWS.colored(COLORS.primary),
   },
@@ -641,15 +643,19 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.fontSizes.base,
     fontWeight: TYPOGRAPHY.fontWeights.semibold,
   },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   biometricButton: {
     backgroundColor: COLORS.withOpacity(COLORS.primary, 0.08),
     borderRadius: RADIUS.lg,
     borderWidth: 1.5,
     borderColor: COLORS.primary,
-    paddingVertical: SPACING.base, // Restored original beautiful size
+    paddingVertical: SPACING.base,
     paddingHorizontal: SPACING.base,
-    marginBottom: SPACING.lg, // Restored original spacing
-    minHeight: 72, // Restored original beautiful height
+    marginBottom: SPACING.lg,
+    minHeight: 72,
   },
   biometricButtonDisabled: {
     opacity: 0.7,
@@ -677,7 +683,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: SPACING.lg, // Restored original spacing
+    marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.base,
   },
   biometricStatusText: {
@@ -689,7 +695,7 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.xl, // Restored original spacing
+    marginBottom: SPACING.xl,
   },
   dividerLine: {
     flex: 1,
@@ -706,24 +712,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: SPACING.lg, // Increased padding for better visibility
-    paddingBottom: SPACING.lg, // Added bottom padding for safe scrolling
+    paddingVertical: SPACING.lg,
   },
   footerText: {
     fontSize: TYPOGRAPHY.fontSizes.sm,
-    color: COLORS.textPrimary, // Changed from textSecondary for better visibility
+    color: COLORS.textPrimary,
     fontWeight: TYPOGRAPHY.fontWeights.medium,
   },
   linkText: {
     fontSize: TYPOGRAPHY.fontSizes.sm,
     color: COLORS.primary,
-    fontWeight: TYPOGRAPHY.fontWeights.bold, // Changed from semibold to bold
-    textDecorationLine: 'underline', // Added underline to make it more obvious
+    fontWeight: TYPOGRAPHY.fontWeights.bold,
+    textDecorationLine: 'underline',
   },
   linkContainer: {
     paddingVertical: SPACING.xs,
     paddingHorizontal: SPACING.sm,
     borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.withOpacity(COLORS.primary, 0.1), // Added background highlight
+    backgroundColor: COLORS.withOpacity(COLORS.primary, 0.1),
   },
 });

@@ -1,4 +1,4 @@
-// store/api/authApi.ts - Enhanced with biometric login support
+// store/api/authApi.ts - Updated with Enhanced OTP Support (Email + SMS)
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '@/store';
 import { User } from '../slices/authSlice';
@@ -48,13 +48,16 @@ interface ResetPasswordRequest {
   password: string;
 }
 
-interface OTPResponse {
+// ENHANCED: Updated OTP Response with multi-channel support
+interface EnhancedOTPResponse {
   message: string;
-  channels?: {
+  channels: string[]; // ['email', 'sms'] - which channels were used
+  expiresAt?: string;
+  deliveryStatus: {
     email: boolean;
     sms: boolean;
+    totalChannels: number;
   };
-  expiresAt?: string;
 }
 
 interface VerifyOTPResponse {
@@ -66,17 +69,27 @@ interface VerifyOTPResponse {
   };
 }
 
+// ENHANCED: Updated service status response
 interface OTPServiceStatusResponse {
   message: string;
   services: {
     email: {
       available: boolean;
       service: string;
+      status: string;
     };
     sms: {
       available: boolean;
       service: string;
+      status: string;
     };
+  };
+  summary: {
+    totalAvailableChannels: number;
+    activeChannels: string[];
+    emailAvailable: boolean;
+    smsAvailable: boolean;
+    hasBackup: boolean;
   };
 }
 
@@ -86,6 +99,7 @@ interface ApiError {
   lockout?: boolean;
   lockoutUntil?: string;
   attemptsRemaining?: number;
+  availableChannels?: string[];
 }
 
 interface BiometricSetupRequest {
@@ -139,7 +153,7 @@ export const authApi = createApi({
       invalidatesTags: ['User'],
     }),
 
-    // New biometric login endpoint
+    // Biometric login endpoint
     biometricLogin: builder.mutation<AuthResponse, BiometricLoginRequest>({
       query: (credentials) => ({
         url: '/users/biometric-login',
@@ -219,6 +233,7 @@ export const authApi = createApi({
         };
       },
     }),
+
     validateUsername: builder.mutation<{ message: string }, { username: string }>({
       query: (data) => ({
         url: '/users/validate-username',
@@ -226,6 +241,7 @@ export const authApi = createApi({
         body: data,
       }),
     }),
+
     logout: builder.mutation<{ status: string; msg: string }, { email: string }>({
       query: (data) => ({
         url: `/users/logout?email=${data.email}`,
@@ -233,8 +249,100 @@ export const authApi = createApi({
       }),
     }),
 
-    // Enhanced OTP-based password reset endpoints
-    sendForgotPasswordOTPEnhanced: builder.mutation<OTPResponse, OTPRequest>({
+    // ENHANCED: New password reset endpoints that support Email + SMS
+    sendPasswordResetOTP: builder.mutation<EnhancedOTPResponse, OTPRequest>({
+      query: (data) => ({
+        url: '/users/password-reset/send-otp',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to send OTP',
+          details: response.data?.details,
+          availableChannels: response.data?.availableChannels,
+        };
+      },
+    }),
+
+    verifyPasswordResetOTP: builder.mutation<VerifyOTPResponse, VerifyOTPRequest>({
+      query: (data) => ({
+        url: '/users/password-reset/verify-otp',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'OTP verification failed',
+          details: response.data?.details,
+          lockout: response.data?.lockout,
+          lockoutUntil: response.data?.lockoutUntil,
+          attemptsRemaining: response.data?.attemptsRemaining,
+        };
+      },
+    }),
+
+    // ENHANCED: Account verification with Email + SMS
+    sendAccountVerificationOTP: builder.mutation<EnhancedOTPResponse, { identifier: string }>({
+      query: (data) => ({
+        url: '/users/account-verification/send-otp',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Failed to send verification OTP',
+          details: response.data?.details,
+          availableChannels: response.data?.availableChannels,
+        };
+      },
+    }),
+
+    verifyAccountVerificationOTP: builder.mutation<{ message: string; user: Partial<User> }, VerifyOTPRequest>({
+      query: (data) => ({
+        url: '/users/account-verification/verify-otp',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Account verification failed',
+          details: response.data?.details,
+          lockout: response.data?.lockout,
+          attemptsRemaining: response.data?.attemptsRemaining,
+        };
+      },
+    }),
+
+    resetPassword: builder.mutation<{ message: string }, ResetPasswordRequest>({
+      query: (data) => ({
+        url: '/users/reset-password',
+        method: 'POST',
+        body: data,
+      }),
+      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
+        return {
+          status: response.status,
+          message: response.data?.message || 'Password reset failed',
+          details: response.data?.details,
+        };
+      },
+    }),
+
+    // ENHANCED: Get OTP service status to show available channels
+    getOTPServiceStatus: builder.query<OTPServiceStatusResponse, void>({
+      query: () => ({
+        url: '/users/otp-service/status',
+        method: 'GET',
+      }),
+    }),
+
+    // LEGACY ENDPOINTS (for backward compatibility)
+    sendForgotPasswordOTPEnhanced: builder.mutation<EnhancedOTPResponse, OTPRequest>({
       query: (data) => ({
         url: '/users/email/password-reset-otp-enhanced',
         method: 'POST',
@@ -265,45 +373,6 @@ export const authApi = createApi({
           attemptsRemaining: response.data?.attemptsRemaining,
         };
       },
-    }),
-
-    resetPassword: builder.mutation<{ message: string }, ResetPasswordRequest>({
-      query: (data) => ({
-        url: '/users/reset-password',
-        method: 'POST',
-        body: data,
-      }),
-      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || 'Password reset failed',
-          details: response.data?.details,
-        };
-      },
-    }),
-
-    // Account verification OTP
-    sendAccountVerificationOTP: builder.mutation<OTPResponse, { identifier: string }>({
-      query: (data) => ({
-        url: '/users/account-verification-otp',
-        method: 'POST',
-        body: data,
-      }),
-      transformErrorResponse: (response: { status: string | number; data: ApiError }) => {
-        return {
-          status: response.status,
-          message: response.data?.message || 'Failed to send verification OTP',
-          details: response.data?.details,
-        };
-      },
-    }),
-
-    // Get OTP service status
-    getOTPServiceStatus: builder.query<OTPServiceStatusResponse, void>({
-      query: () => ({
-        url: '/users/otp-service-status',
-        method: 'GET',
-      }),
     }),
 
     // Legacy endpoints (kept for backward compatibility)
@@ -344,16 +413,21 @@ export const {
   useValidateUsernameMutation,
   useLogoutMutation,
 
-  // Enhanced OTP endpoints
+  // ENHANCED: New OTP endpoints that support Email + SMS
+  useSendPasswordResetOTPMutation,
+  useVerifyPasswordResetOTPMutation,
+  useSendAccountVerificationOTPMutation,
+  useVerifyAccountVerificationOTPMutation,
+  useResetPasswordMutation,
+  useGetOTPServiceStatusQuery,
+
+  // Legacy enhanced endpoints (for backward compatibility)
   useSendForgotPasswordOTPEnhancedMutation,
   useVerifyResetOTPEnhancedMutation,
-  useResetPasswordMutation,
 
   // Legacy endpoints (for backward compatibility)
   useSendForgotPasswordOTPMutation,
   useVerifyResetOTPMutation,
 
   useResendVerificationEmailMutation,
-  useSendAccountVerificationOTPMutation,
-  useGetOTPServiceStatusQuery,
 } = authApi;

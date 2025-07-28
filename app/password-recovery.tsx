@@ -11,6 +11,7 @@ import {
     TextInput,
     Text,
     ScrollView,
+    Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,10 +20,14 @@ import * as Yup from 'yup';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 import {
-    useVerifyResetOTPEnhancedMutation,
+    // ENHANCED: Use new endpoints that support Email + SMS
+    useSendPasswordResetOTPMutation,
+    useVerifyPasswordResetOTPMutation,
     useResetPasswordMutation,
-    useSendForgotPasswordOTPEnhancedMutation
+    useGetOTPServiceStatusQuery
 } from '@/store/api/authApi';
+
+const { width, height } = Dimensions.get('window');
 
 export default function PasswordRecoveryScreen() {
     const [currentStep, setCurrentStep] = useState('email');
@@ -31,15 +36,32 @@ export default function PasswordRecoveryScreen() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [resetToken, setResetToken] = useState('');
     const [countdown, setCountdown] = useState(0);
+    const [deliveryChannels, setDeliveryChannels] = useState<string[]>([]);
+    const [deliveryStatus, setDeliveryStatus] = useState<{
+        email: boolean;
+        sms: boolean;
+        totalChannels: number;
+    } | null>(null);
 
     const router = useRouter();
 
     const passwordInputRef = useRef<TextInput>(null);
     const confirmPasswordInputRef = useRef<TextInput>(null);
 
-    const [sendOTP, { isLoading: isSendingOTP }] = useSendForgotPasswordOTPEnhancedMutation();
-    const [verifyOTP, { isLoading: isVerifyingOTP }] = useVerifyResetOTPEnhancedMutation();
+    // ENHANCED: Use new OTP endpoints
+    const [sendOTP, { isLoading: isSendingOTP }] = useSendPasswordResetOTPMutation();
+    const [verifyOTP, { isLoading: isVerifyingOTP }] = useVerifyPasswordResetOTPMutation();
     const [resetPassword, { isLoading: isResettingPassword }] = useResetPasswordMutation();
+
+    // NEW: Get OTP service status - with proper error handling
+    const { data: otpServiceStatus, isLoading: isLoadingStatus, error: statusError } = useGetOTPServiceStatusQuery();
+
+    console.log('Password Recovery Debug:', {
+        currentStep,
+        userIdentifier,
+        resetToken: !!resetToken,
+        countdown
+    });
 
     // Countdown timer for resend OTP
     useEffect(() => {
@@ -86,17 +108,26 @@ export default function PasswordRecoveryScreen() {
                 return;
             }
 
+            // ENHANCED: Use new endpoint that supports both email and SMS
             const result = await sendOTP({
                 username: values.identifier.trim()
             }).unwrap();
 
-            console.log('OTP sent successfully:', result);
+            console.log('Enhanced OTP sent successfully:', result);
 
             setUserIdentifier(values.identifier.trim());
+            setDeliveryChannels(result.channels || []);
+            setDeliveryStatus(result.deliveryStatus);
             setCurrentStep('otp');
             setCountdown(60);
 
-            Alert.alert('Success', 'Verification code sent successfully to your email.');
+            // ENHANCED: Show which channels were used
+            const channelNames = result.channels?.join(' and ') || 'available channels';
+            Alert.alert(
+                'Success',
+                `Verification code sent successfully via ${channelNames}.`,
+                [{ text: 'OK' }]
+            );
         } catch (error: any) {
             console.error('Send OTP error:', error);
 
@@ -105,6 +136,11 @@ export default function PasswordRecoveryScreen() {
                 errorMessage = error.data.message;
             } else if (error?.message) {
                 errorMessage = error.message;
+            }
+
+            // ENHANCED: Show available channels if some failed
+            if (error?.data?.availableChannels && error.data.availableChannels.length > 0) {
+                errorMessage += `\n\nAvailable delivery methods: ${error.data.availableChannels.join(', ')}`;
             }
 
             Alert.alert('Error', errorMessage);
@@ -155,9 +191,13 @@ export default function PasswordRecoveryScreen() {
                 errorMessage = error.message;
             }
 
-            // Handle specific error cases
+            // ENHANCED: Handle specific error cases with more details
             if (error?.status === 429) {
                 errorMessage = error?.data?.message || 'Too many attempts. Account temporarily locked.';
+            }
+
+            if (error?.data?.attemptsRemaining !== undefined) {
+                errorMessage += `\n\n${error.data.attemptsRemaining} attempts remaining.`;
             }
 
             Alert.alert('Verification Failed', errorMessage);
@@ -230,9 +270,13 @@ export default function PasswordRecoveryScreen() {
         try {
             console.log('Resending OTP for:', userIdentifier);
 
-            await sendOTP({ username: userIdentifier.trim() }).unwrap();
+            const result = await sendOTP({ username: userIdentifier.trim() }).unwrap();
             setCountdown(60);
-            Alert.alert('Success', 'A new OTP has been sent to your email.');
+            setDeliveryChannels(result.channels || []);
+            setDeliveryStatus(result.deliveryStatus);
+
+            const channelNames = result.channels?.join(' and ') || 'available channels';
+            Alert.alert('Success', `A new OTP has been sent via ${channelNames}.`);
         } catch (error: any) {
             console.error('Resend OTP error:', error);
 
@@ -245,6 +289,58 @@ export default function PasswordRecoveryScreen() {
 
             Alert.alert('Error', errorMessage);
         }
+    };
+
+    // ENHANCED: Render delivery status info
+    const renderDeliveryStatus = () => {
+        if (!deliveryStatus || deliveryChannels.length === 0) return null;
+
+        return (
+            <View style={styles.deliveryStatusContainer}>
+                <Text style={styles.deliveryStatusTitle}>Delivery Status:</Text>
+                {deliveryStatus.email && (
+                    <View style={styles.deliveryItem}>
+                        <MaterialIcons name="email" size={16} color={COLORS.success} />
+                        <Text style={styles.deliveryText}>Email ✓</Text>
+                    </View>
+                )}
+                {deliveryStatus.sms && (
+                    <View style={styles.deliveryItem}>
+                        <MaterialIcons name="sms" size={16} color={COLORS.success} />
+                        <Text style={styles.deliveryText}>SMS ✓</Text>
+                    </View>
+                )}
+                <Text style={styles.deliveryCount}>
+                    Sent via {deliveryStatus.totalChannels} channel{deliveryStatus.totalChannels > 1 ? 's' : ''}
+                </Text>
+            </View>
+        );
+    };
+
+    // ENHANCED: Show service status
+    const renderServiceStatus = () => {
+        if (!otpServiceStatus?.summary) return null;
+
+        const { summary } = otpServiceStatus;
+        if (summary.totalAvailableChannels === 0) {
+            return (
+                <View style={styles.serviceStatusContainer}>
+                    <MaterialIcons name="warning" size={16} color={COLORS.warning} />
+                    <Text style={styles.serviceStatusText}>
+                        OTP services are temporarily unavailable
+                    </Text>
+                </View>
+            );
+        }
+
+        return (
+            <View style={styles.serviceStatusContainer}>
+                <Text style={styles.serviceStatusText}>
+                    Available: {summary.activeChannels?.join(', ') || 'Loading...'}
+                    {summary.hasBackup && ' (backup available)'}
+                </Text>
+            </View>
+        );
     };
 
     const renderEmailStep = () => (
@@ -267,6 +363,9 @@ export default function PasswordRecoveryScreen() {
                     <Text style={styles.stepSubtitle}>
                         Enter your email, username, or phone number to receive a verification code
                     </Text>
+
+                    {/* ENHANCED: Show available services */}
+                    {renderServiceStatus()}
 
                     <View style={styles.inputWrapper}>
                         <View style={[
@@ -342,8 +441,11 @@ export default function PasswordRecoveryScreen() {
 
                     <Text style={styles.stepTitle}>Enter Verification Code</Text>
                     <Text style={styles.stepSubtitle}>
-                        We've sent a 6-digit verification code to your email and phone number
+                        We've sent a 6-digit verification code to your registered contact details
                     </Text>
+
+                    {/* ENHANCED: Show delivery status */}
+                    {renderDeliveryStatus()}
 
                     <View style={styles.inputWrapper}>
                         <View style={[
@@ -616,10 +718,7 @@ export default function PasswordRecoveryScreen() {
     );
 
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
             <LinearGradient
@@ -628,6 +727,7 @@ export default function PasswordRecoveryScreen() {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
             >
+                {/* Fixed Header */}
                 <View style={styles.headerContainer}>
                     <TouchableOpacity
                         style={styles.backButton}
@@ -648,14 +748,47 @@ export default function PasswordRecoveryScreen() {
                     </Text>
                 </View>
 
-                <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
-                    <View style={styles.formContent}>
-                        {currentStep === 'email' ? renderEmailStep() :
-                            currentStep === 'otp' ? renderOTPStep() : renderPasswordStep()}
-                    </View>
-                </ScrollView>
+                {/* Form Container with proper structure */}
+                <View style={styles.formContainer}>
+                    <KeyboardAvoidingView
+                        style={styles.keyboardAvoidingView}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+                    >
+                        <ScrollView
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            contentContainerStyle={styles.scrollContentContainer}
+                            bounces={false}
+                        >
+                            <View style={styles.formContent}>
+                                {/* Debug info */}
+                                {/*{__DEV__ && (*/}
+                                {/*    <Text style={{ fontSize: 12, color: 'red', marginBottom: 10 }}>*/}
+                                {/*        Debug: Current step is "{currentStep}"*/}
+                                {/*    </Text>*/}
+                                {/*)}*/}
+
+                                {/* Main content with fallback */}
+                                {(() => {
+                                    switch (currentStep) {
+                                        case 'email':
+                                            return renderEmailStep();
+                                        case 'otp':
+                                            return renderOTPStep();
+                                        case 'password':
+                                            return renderPasswordStep();
+                                        default:
+                                            console.error('Unknown step:', currentStep);
+                                            return renderEmailStep(); // Fallback to email step
+                                    }
+                                })()}
+                            </View>
+                        </ScrollView>
+                    </KeyboardAvoidingView>
+                </View>
             </LinearGradient>
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 
@@ -667,10 +800,11 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     headerContainer: {
-        paddingTop: Platform.OS === 'ios' ? SPACING['4xl'] : SPACING['3xl'],
+        paddingTop: Platform.OS === 'ios' ? SPACING['3xl'] : SPACING['2xl'],
         paddingHorizontal: SPACING.xl,
-        paddingBottom: SPACING.xl,
+        paddingBottom: SPACING.lg,
         alignItems: 'center',
+        minHeight: Platform.OS === 'ios' ? 200 : 180,
     },
     backButton: {
         position: 'absolute',
@@ -710,8 +844,13 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: RADIUS['3xl'],
         borderTopRightRadius: RADIUS['3xl'],
     },
+    formContentContainer: {
+        flexGrow: 1,
+        paddingBottom: SPACING['4xl'], // Extra padding at bottom for keyboard
+    },
     formContent: {
         padding: SPACING.xl,
+        minHeight: height * 0.6, // Ensure minimum height
     },
     stepIndicator: {
         flexDirection: 'row',
@@ -850,5 +989,50 @@ const styles = StyleSheet.create({
     },
     requirementTextValid: {
         color: COLORS.success,
+    },
+    // ENHANCED: New styles for delivery status
+    deliveryStatusContainer: {
+        backgroundColor: COLORS.withOpacity(COLORS.success, 0.1),
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.lg,
+        borderWidth: 1,
+        borderColor: COLORS.withOpacity(COLORS.success, 0.3),
+    },
+    deliveryStatusTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.sm,
+    },
+    deliveryItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: SPACING.xs,
+    },
+    deliveryText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.success,
+        marginLeft: SPACING.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+    },
+    deliveryCount: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+        marginTop: SPACING.xs,
+        fontStyle: 'italic',
+    },
+    serviceStatusContainer: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    serviceStatusText: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+        marginLeft: SPACING.sm,
     },
 });
