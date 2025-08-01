@@ -152,6 +152,33 @@ export default function DashboardScreen() {
     // },
   ];
 
+  const quickActions2: QuickAction[] = [
+    {
+      id: '1',
+      title: 'Int\'l Airtime',
+      icon: 'phone',
+      route: '/bills/international-airtime',
+    },
+    {
+      id: '2',
+      title: 'Betting',
+      icon: 'wifi',
+      route: '/bills/sports-betting',
+    },
+    {
+      id: '3',
+      title: 'Flights',
+      icon: 'flash-on',
+      route: '/bills/flight-booking',
+    },
+    // {
+    //   id: '4',
+    //   title: 'Send SMS',
+    //   icon: 'sms',
+    //   route: '/bills/bulk-sms',
+    // },
+  ];
+
   const getNonMajorServices = (sv) => {
     let filtered = sv.filter(el => !(el.name.toLowerCase().includes('electric') || el.name.toLowerCase().includes('airtime')
         || el.name.toLowerCase().includes('data') || el.name.toLowerCase().includes('other')));
@@ -518,6 +545,12 @@ export default function DashboardScreen() {
               {quickActions.map(renderQuickAction)}
             </View>
           </View>
+            <View style={styles.section}>
+              {/*<Text style={styles.sectionTitle}>Quick Actions</Text>*/}
+              <View style={styles.quickActionsGrid}>
+                {quickActions2.map(renderQuickAction)}
+              </View>
+            </View>
 
           {/* Service Categories */}
           <View style={styles.section}>

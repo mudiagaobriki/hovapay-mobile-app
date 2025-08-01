@@ -1,4 +1,4 @@
-// store/api/enhancedBillsApi.ts - Enhanced Bills API with Sports Betting, Flight Booking, and International Airtime
+// store/api/enhancedBillsApi.ts - Enhanced Bills API with Corrected VTPass Structure
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { RootState } from '@/store';
 
@@ -204,68 +204,130 @@ interface FlightBookingResponse {
     };
 }
 
-// International Airtime interfaces
+// ==================== CORRECTED INTERNATIONAL AIRTIME INTERFACES ====================
+
+// VTPass Country interface (matches get-international-airtime-countries response)
 interface Country {
-    code: string;
-    name: string;
-    dialingCode: string;
-    flag?: string;
-    region?: string;
+    code: string;          // ISO 2-letter country code (e.g., 'GH', 'KE')
+    name: string;          // Country name (e.g., 'Ghana', 'Kenya')
+    flag?: string;         // Country flag emoji (optional)
+    region?: string;       // Region name (optional)
+    dialingCode?: string;  // Will be added by frontend (e.g., '+233')
 }
 
+// VTPass Product Type interface (matches get-international-airtime-product-types response)
+interface ProductType {
+    product_type_id: number;  // Product type ID (1=Mobile Top Up, 4=Mobile Data)
+    name: string;            // Product type name
+}
+
+// VTPass Operator interface (matches get-international-airtime-operators response)
 interface Operator {
-    id: string;
-    name: string;
-    logo?: string;
-    type: 'prepaid' | 'postpaid' | 'both';
+    operator_id: number;     // VTPass operator ID (not string!)
+    name: string;           // Operator name (e.g., 'MTN Ghana')
+    logo?: string;          // Operator logo URL (optional)
 }
 
+// VTPass Product/Variation interface (matches service-variations response)
 interface AirtimeProduct {
-    code: string;
-    name: string;
-    denomination: string;
-    amount: number;
-    currency: string;
+    code: string;              // VTPass variation_code for purchase
+    name: string;             // Product name/description
+    denomination: string;     // Display denomination (e.g., '5 GHS', '10 KES')
+    amount: number;          // Amount in local currency
+    currency: string;        // Local currency code (e.g., 'GHS', 'KES')
+    fixedPrice?: boolean;    // Whether price is fixed (uses chargedAmount) or variable (uses variationRate)
+    variationRate?: number;  // Rate multiplier for variable pricing (amount * rate = NGN cost)
+    chargedAmount?: number;  // Fixed NGN amount charged (for fixed price products)
 }
 
+// Request interface for purchasing international airtime
 interface InternationalAirtimeRequest {
-    country: Country;
-    operator: Operator;
-    phoneNumber: string;
-    amount: number;
-    localCurrency: string;
-    productCode: string;
-    denomination: string;
-    productName: string;
+    country: {
+        code: string;         // ISO 2-letter country code
+        name: string;         // Country name
+        dialingCode: string;  // International dialing code (e.g., '+233')
+        flag?: string;        // Country flag emoji
+        region?: string;      // Region name
+    };
+    operator: {
+        id: number;          // VTPass operator_id (number, not string!)
+        name: string;        // Operator name
+        logo?: string;       // Operator logo URL
+    };
+    productCode: string;     // VTPass variation_code
+    phoneNumber: string;     // Recipient phone number (will be formatted to international)
+    amount: number;          // Amount in local currency
+    localCurrency: string;   // Local currency code (e.g., 'GHS', 'KES')
+    denomination: string;    // Display denomination (e.g., '5 GHS')
+    productName: string;     // Product name/description
     paymentMethod?: 'wallet';
 }
 
+// Response interface for international airtime purchase
 interface InternationalAirtimeResponse {
     success: boolean;
     message: string;
     data: {
-        transactionRef: string;
-        phoneNumber: string;
-        amount: number;
-        currency: string;
-        nairaAmount: number;
-        status: string;
-        deliveryMethod: string;
-        instructions: string;
+        transactionRef: string;     // Our transaction reference
+        phoneNumber: string;        // Recipient phone number
+        amount: number;             // Amount in local currency
+        currency: string;           // Local currency code
+        nairaAmount: number;        // Amount charged in NGN
+        status: string;             // Transaction status
+        deliveryMethod: string;     // Delivery method (usually 'instant')
+        instructions: string;       // Delivery instructions
     };
 }
 
+// Exchange rates interface
 interface ExchangeRate {
-    from: string;
-    to: string;
-    rate: number;
-    lastUpdated: string;
+    base: string;           // Base currency (NGN)
+    rates: Record<string, number>;  // Currency rates object
+    lastUpdated: string;    // ISO timestamp
+}
+
+// API Response wrapper interfaces to match backend structure
+interface CountriesResponse {
+    success: boolean;
+    data: {
+        success: boolean;
+        countries: Country[];
+    };
+}
+
+interface ProductTypesResponse {
+    success: boolean;
+    data: {
+        success: boolean;
+        productTypes: ProductType[];
+    };
+}
+
+interface OperatorsResponse {
+    success: boolean;
+    data: {
+        success: boolean;
+        operators: Operator[];
+    };
+}
+
+interface ProductsResponse {
+    success: boolean;
+    data: {
+        success: boolean;
+        products: AirtimeProduct[];
+    };
+}
+
+interface ExchangeRatesResponse {
+    success: boolean;
+    data: ExchangeRate;
 }
 
 export const enhancedBillsApi = createApi({
     reducerPath: 'enhancedBillsApi',
     baseQuery: fetchBaseQuery({
-        baseUrl: 'https://hovapay-api.onrender.com/api/bills/enhanced',
+        baseUrl: 'https://hovapay-api.onrender.com/api/bills', // Fixed: removed /enhanced
         prepareHeaders: (headers, { getState }) => {
             const token = (getState() as RootState).auth.token;
             if (token) {
@@ -283,7 +345,10 @@ export const enhancedBillsApi = createApi({
          * Get available sports for betting
          */
         getSports: builder.query<{ success: boolean; data: Sport[] }, void>({
-            query: () => '/sports',
+            query: () => ({
+                url: 'https://hovapay-api.onrender.com/api/bills/sports',
+                method: 'GET',
+            }),
             providesTags: ['Sports'],
         }),
 
@@ -291,7 +356,10 @@ export const enhancedBillsApi = createApi({
          * Get leagues for a specific sport
          */
         getLeagues: builder.query<{ success: boolean; data: League[] }, string>({
-            query: (sportId) => `/sports/${sportId}/leagues`,
+            query: (sportId) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/sports/${sportId}/leagues`,
+                method: 'GET',
+            }),
             providesTags: ['Sports'],
         }),
 
@@ -301,7 +369,10 @@ export const enhancedBillsApi = createApi({
         getMatches: builder.query<{ success: boolean; data: Match[] }, { sportId: string; leagueId?: string }>({
             query: ({ sportId, leagueId }) => {
                 const params = leagueId ? `?leagueId=${leagueId}` : '';
-                return `/sports/${sportId}/matches${params}`;
+                return {
+                    url: `https://hovapay-api.onrender.com/api/bills/sports/${sportId}/matches${params}`,
+                    method: 'GET',
+                };
             },
             providesTags: ['Sports'],
         }),
@@ -311,7 +382,7 @@ export const enhancedBillsApi = createApi({
          */
         placeBet: builder.mutation<SportsBetResponse, PlaceBetRequest>({
             query: (betData) => ({
-                url: '/sports-betting/place-bet',
+                url: 'https://hovapay-api.onrender.com/api/bills/sports-betting/place-bet',
                 method: 'POST',
                 body: betData,
             }),
@@ -322,7 +393,10 @@ export const enhancedBillsApi = createApi({
          * Get bet status
          */
         getBetStatus: builder.query<{ success: boolean; data: any }, string>({
-            query: (transactionRef) => `/sports-betting/bet-status/${transactionRef}`,
+            query: (transactionRef) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/sports-betting/bet-status/${transactionRef}`,
+                method: 'GET',
+            }),
             providesTags: ['Transactions'],
         }),
 
@@ -333,7 +407,8 @@ export const enhancedBillsApi = createApi({
          */
         searchFlights: builder.query<{ success: boolean; data: FlightOffer[]; meta: any }, FlightSearchParams>({
             query: (params) => ({
-                url: '/flights/search',
+                url: 'https://hovapay-api.onrender.com/api/bills/flights/search',
+                method: 'GET',
                 params,
             }),
             providesTags: ['Flights'],
@@ -343,7 +418,10 @@ export const enhancedBillsApi = createApi({
          * Search airports
          */
         searchAirports: builder.query<{ success: boolean; data: Airport[] }, string>({
-            query: (keyword) => `/flights/airports/search?keyword=${keyword}`,
+            query: (keyword) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/flights/airports/search?keyword=${keyword}`,
+                method: 'GET',
+            }),
             providesTags: ['Flights'],
         }),
 
@@ -352,7 +430,7 @@ export const enhancedBillsApi = createApi({
          */
         bookFlight: builder.mutation<FlightBookingResponse, FlightBookingRequest>({
             query: (bookingData) => ({
-                url: '/flights/book',
+                url: 'https://hovapay-api.onrender.com/api/bills/flights/book',
                 method: 'POST',
                 body: bookingData,
             }),
@@ -363,50 +441,111 @@ export const enhancedBillsApi = createApi({
          * Get flight booking details
          */
         getFlightBooking: builder.query<{ success: boolean; data: any }, string>({
-            query: (transactionRef) => `/flights/booking/${transactionRef}`,
+            query: (transactionRef) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/flights/booking/${transactionRef}`,
+                method: 'GET',
+            }),
             providesTags: ['Transactions'],
         }),
 
-        // ==================== INTERNATIONAL AIRTIME ENDPOINTS ====================
+        // ==================== TEST ENDPOINT ====================
 
         /**
-         * Get supported countries
+         * Test if basic bills endpoint works
          */
-        getInternationalCountries: builder.query<{ success: boolean; data: Country[] }, void>({
-            query: () => '/international-airtime/countries',
+        testBillsEndpoint: builder.query<any, void>({
+            query: () => ({
+                url: 'https://hovapay-api.onrender.com/api/bills',
+                method: 'GET',
+            }),
+            transformResponse: (response: any) => {
+                console.log('Bills endpoint response:', response);
+                return response;
+            },
+            transformErrorResponse: (response: any) => {
+                console.log('Bills endpoint error:', response);
+                return response;
+            },
+        }),
+
+        // ==================== CORRECTED INTERNATIONAL AIRTIME ENDPOINTS ====================
+
+        /**
+         * Get supported countries for international airtime
+         * Maps to: GET /api/get-international-airtime-countries
+         */
+        getInternationalCountries: builder.query<CountriesResponse, void>({
+            query: () => ({
+                url: 'https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/countries',
+                method: 'GET',
+            }),
+            providesTags: ['InternationalAirtime'],
+            transformResponse: (response: any) => {
+                console.log('Raw countries API response:', response);
+                return response;
+            },
+            transformErrorResponse: (response: any) => {
+                console.log('Countries API Error response:', response);
+                return response;
+            },
+        }),
+
+        /**
+         * Get product types for a country (optional step)
+         * Maps to: GET /api/get-international-airtime-product-types?code={countryCode}
+         */
+        getInternationalProductTypes: builder.query<ProductTypesResponse, string>({
+            query: (countryCode) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/product-types/${countryCode}`,
+                method: 'GET',
+            }),
             providesTags: ['InternationalAirtime'],
         }),
 
         /**
-         * Get operators for a country
+         * Get operators for a country and product type
+         * Maps to: GET /api/get-international-airtime-operators?code={countryCode}&product_type_id={productTypeId}
+         * @param params - Should be in format "GH?product_type_id=1" or just "GH" (defaults to product_type_id=1)
          */
-        getInternationalOperators: builder.query<{ success: boolean; data: Operator[] }, string>({
-            query: (countryCode) => `/international-airtime/operators/${countryCode}`,
+        getInternationalOperators: builder.query<OperatorsResponse, string>({
+            query: (params) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/operators/${params}`,
+                method: 'GET',
+            }),
             providesTags: ['InternationalAirtime'],
         }),
 
         /**
-         * Get products for an operator
+         * Get products/variations for an operator
+         * Maps to: GET /api/service-variations?serviceID=foreign-airtime&operator_id={operatorId}&product_type_id={productTypeId}
+         * @param params - Should be in format "1?product_type_id=1" or just "1" (defaults to product_type_id=1)
          */
-        getInternationalProducts: builder.query<{ success: boolean; data: AirtimeProduct[] }, string>({
-            query: (operatorId) => `/international-airtime/products/${operatorId}`,
+        getInternationalProducts: builder.query<ProductsResponse, string>({
+            query: (params) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/products/${params}`,
+                method: 'GET',
+            }),
             providesTags: ['InternationalAirtime'],
         }),
 
         /**
-         * Get exchange rates
+         * Get exchange rates for international airtime
          */
-        getExchangeRates: builder.query<{ success: boolean; data: ExchangeRate[] }, void>({
-            query: () => '/international-airtime/exchange-rates',
+        getExchangeRates: builder.query<ExchangeRatesResponse, void>({
+            query: () => ({
+                url: 'https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/exchange-rates',
+                method: 'GET',
+            }),
             providesTags: ['InternationalAirtime'],
         }),
 
         /**
          * Purchase international airtime
+         * Maps to: POST /api/pay with serviceID=foreign-airtime
          */
         purchaseInternationalAirtime: builder.mutation<InternationalAirtimeResponse, InternationalAirtimeRequest>({
             query: (airtimeData) => ({
-                url: '/international-airtime/purchase',
+                url: 'https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/purchase',
                 method: 'POST',
                 body: airtimeData,
             }),
@@ -417,7 +556,10 @@ export const enhancedBillsApi = createApi({
          * Get international airtime transaction status
          */
         getInternationalAirtimeStatus: builder.query<{ success: boolean; data: any }, string>({
-            query: (transactionRef) => `/international-airtime/status/${transactionRef}`,
+            query: (transactionRef) => ({
+                url: `https://hovapay-api.onrender.com/api/bills/enhanced/international-airtime/status/${transactionRef}`,
+                method: 'GET',
+            }),
             providesTags: ['Transactions'],
         }),
 
@@ -458,6 +600,9 @@ export const enhancedBillsApi = createApi({
 });
 
 export const {
+    // Test hook
+    useTestBillsEndpointQuery,
+
     // Sports Betting hooks
     useGetSportsQuery,
     useGetLeaguesQuery,
@@ -471,8 +616,9 @@ export const {
     useBookFlightMutation,
     useGetFlightBookingQuery,
 
-    // International Airtime hooks
+    // International Airtime hooks (corrected)
     useGetInternationalCountriesQuery,
+    useGetInternationalProductTypesQuery,  // Added new hook
     useGetInternationalOperatorsQuery,
     useGetInternationalProductsQuery,
     useGetExchangeRatesQuery,

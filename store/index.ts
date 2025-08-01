@@ -1,4 +1,4 @@
-// store/index.ts - Updated Redux Store with Profile API
+// store/index.ts - Updated Redux Store with Enhanced Bills API
 import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
@@ -6,7 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { combineReducers } from 'redux';
 import { authApi } from './api/authApi';
 import { billsApi } from './api/billsApi';
-import { profileApi } from './api/profileApi'; // Add profile API
+import { enhancedBillsApi } from './api/enhancedBillsApi'; // Add enhanced bills API
+import { profileApi } from './api/profileApi';
 import authReducer from './slices/authSlice';
 
 // Only persist auth, not the entire store
@@ -20,7 +21,8 @@ const rootReducer = combineReducers({
     auth: persistReducer(authPersistConfig, authReducer),
     [authApi.reducerPath]: authApi.reducer,
     [billsApi.reducerPath]: billsApi.reducer,
-    [profileApi.reducerPath]: profileApi.reducer, // Add profile API reducer
+    [enhancedBillsApi.reducerPath]: enhancedBillsApi.reducer, // Add enhanced bills API reducer
+    [profileApi.reducerPath]: profileApi.reducer,
 });
 
 export const store = configureStore({
@@ -33,7 +35,8 @@ export const store = configureStore({
         }).concat(
             authApi.middleware,
             billsApi.middleware,
-            profileApi.middleware // Add profile API middleware
+            enhancedBillsApi.middleware, // Add enhanced bills API middleware
+            profileApi.middleware
         ),
     devTools: __DEV__,
 });
