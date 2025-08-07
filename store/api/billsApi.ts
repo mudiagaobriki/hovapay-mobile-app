@@ -340,7 +340,7 @@ export const billsApi = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Wallet', 'Transactions', 'Services', 'VirtualAccount', 'InsuranceOptions', 'SMS'],
+  tagTypes: ['Wallet', 'Transactions', 'Services', 'VirtualAccount', 'InsuranceOptions', 'SMS', 'BillPayment', 'Transaction',],
   endpoints: (builder) => ({
     // Wallet endpoints
     getWalletBalance: builder.query<{data: WalletBalance}, void>({
@@ -375,6 +375,24 @@ export const billsApi = createApi({
       }),
       providesTags: ['Transactions'],
     }),
+
+    getEnhancedTransactionStatus: builder.query<{
+      data: any;
+      meta?: {
+        transactionType: 'bill_payment' | 'bet_wallet_funding' | 'sports_betting' | 'flight_booking' | 'international_airtime';
+        enhanced: boolean;
+      };
+    }, string>({
+      query: (transactionRef) => ({
+        url: `/transaction-status/${transactionRef}`,
+        method: 'GET',
+      }),
+      providesTags: (result, error, transactionRef) => [
+        { type: 'Transaction', id: transactionRef },
+        { type: 'BillPayment', id: transactionRef }
+      ],
+    }),
+
 
     createVirtualAccount: builder.mutation<VirtualAccountResponse, {}>({
       query: () => ({
@@ -596,4 +614,5 @@ export const {
   useGetBillHistoryQuery,
   useCheckTransactionStatusQuery,
   useGetTransactionStatusQuery,
+  useGetEnhancedTransactionStatusQuery,
 } = billsApi;

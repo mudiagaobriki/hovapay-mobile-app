@@ -17,7 +17,7 @@ import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useGetTransactionStatusQuery } from '@/store/api/billsApi';
+import { useGetTransactionStatusQuery, useGetEnhancedTransactionStatusQuery } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -43,7 +43,14 @@ export default function TransactionReceiptScreen() {
     const [isDownloading, setIsDownloading] = useState(false);
 
     // Helper function to get service name
-    const getServiceName = (serviceID: string, serviceType: string) => {
+    const getServiceName = (serviceID: string, serviceType: string, platform?: string) => {
+        // Handle bet wallet funding specifically
+        if (serviceType === 'bet_wallet_funding' || params.type === 'bet_wallet_funding') {
+            const platformName = platform || serviceID || params.platform || 'Betting Platform';
+            return `${platformName.charAt(0).toUpperCase() + platformName.slice(1)} Wallet Funding`;
+        }
+
+        // Regular service name mapping
         const serviceNames: Record<string, string> = {
             'mtn': 'MTN Airtime',
             'airtel': 'Airtel Airtime',
@@ -78,6 +85,7 @@ export default function TransactionReceiptScreen() {
         return serviceType ? serviceType.charAt(0).toUpperCase() + serviceType.slice(1) : 'Service';
     };
 
+
     // Fetch real-time transaction status from API
     const {
         data: transactionData,
@@ -85,23 +93,71 @@ export default function TransactionReceiptScreen() {
         error,
         refetch
     } = useGetTransactionStatusQuery(params.transactionRef, {
-        pollingInterval: 10000, // Poll every 10 seconds for pending transactions
+        pollingInterval: params.type === 'bet_wallet_funding' ? 5000 : 10000, // Poll more frequently for bet wallet
         skip: !params.transactionRef,
     });
 
+    // const {
+    //     data: transactionData,
+    //     isLoading,
+    //     error,
+    //     refetch
+    // } = useGetEnhancedTransactionStatusQuery(params.transactionRef, {
+    //     pollingInterval: 10000, // Poll every 10 seconds for all transaction types
+    //     skip: !params.transactionRef,
+    // });
+
+    const getTransactionData = () => {
+        if (transactionData?.data) {
+            return transactionData.data;
+        }
+
+        // For bet wallet funding, check if we have the data in a different format
+        if (params.type === 'bet_wallet_funding' && transactionData) {
+            // Handle bet wallet specific response format
+            return {
+                status: transactionData.status || params.status,
+                amount: transactionData.amount || parseFloat(params.amount || '0'),
+                accountName: transactionData.accountName || params.accountName,
+                accountIdentifier: transactionData.accountIdentifier || params.accountIdentifier,
+                platform: transactionData.platform || params.platform,
+                phone: transactionData.customerPhone || params.phone,
+                billersCode: transactionData.accountIdentifier || params.billersCode,
+                serviceID: transactionData.platform || params.serviceID,
+                serviceType: 'bet_wallet_funding',
+                transactionRef: params.transactionRef,
+                createdAt: transactionData.createdAt,
+                vtpassRef: transactionData.ninejaPayRef || transactionData.vtpassRef
+            };
+        }
+
+        return null;
+    };
+
+
     // Use API data if available, otherwise fall back to params
-    const transaction = transactionData?.data;
+    const transaction = getTransactionData();
     const actualStatus = transaction?.status || params.status;
     const actualAmount = transaction?.amount || parseFloat(params.amount || '0');
     const actualPhone = transaction?.phone || params.phone;
-    const actualService = getServiceName(transaction?.serviceID || '', transaction?.serviceType || params.type || '');
-    const actualBillersCode = transaction?.billersCode || params.billersCode;
+    const actualService = getServiceName(
+        transaction?.serviceID || params.serviceID || '',
+        transaction?.serviceType || params.type || '',
+        transaction?.platform || params.platform
+    );
+    const actualBillersCode = transaction?.billersCode ||
+        transaction?.accountIdentifier ||
+        params.billersCode ||
+        params.accountIdentifier;
 
-    console.log('Receipt data:', {
+    console.log('Enhanced receipt data:', {
         transaction,
         actualStatus,
         params,
-        isLoading
+        isLoading,
+        transactionType: params.type,
+        serviceID: transaction?.serviceID,
+        platform: transaction?.platform
     });
 
     const formatCurrency = (amount: string | number) => {

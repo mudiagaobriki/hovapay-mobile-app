@@ -545,12 +545,12 @@ export default function DashboardScreen() {
               {quickActions.map(renderQuickAction)}
             </View>
           </View>
-            <View style={styles.section}>
-              {/*<Text style={styles.sectionTitle}>Quick Actions</Text>*/}
-              <View style={styles.quickActionsGrid}>
-                {quickActions2.map(renderQuickAction)}
-              </View>
-            </View>
+            {/*<View style={styles.section}>*/}
+            {/*  /!*<Text style={styles.sectionTitle}>Quick Actions</Text>*!/*/}
+            {/*  <View style={styles.quickActionsGrid}>*/}
+            {/*    {quickActions2.map(renderQuickAction)}*/}
+            {/*  </View>*/}
+            {/*</View>*/}
 
           {/* Service Categories */}
           <View style={styles.section}>

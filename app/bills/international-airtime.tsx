@@ -43,7 +43,7 @@ interface Country {
 interface Operator {
     operator_id: number; // Changed from id to operator_id to match VTPass API
     name: string;
-    logo?: string;
+    operator_image?: string; // Changed from logo to operator_image to match VTPass API
 }
 
 interface AirtimeProduct {
@@ -233,7 +233,7 @@ export default function InternationalAirtimeScreen() {
                 operator: {
                     id: selectedOperator.operator_id, // Use operator_id
                     name: selectedOperator.name,
-                    logo: selectedOperator.logo
+                    logo: selectedOperator.operator_image // Use operator_image
                 },
                 phoneNumber: `+${selectedCountry.prefix}${values.phoneNumber}`,
                 amount: selectedProduct.amount,
@@ -328,9 +328,13 @@ export default function InternationalAirtimeScreen() {
             }}
         >
             <View style={styles.operatorIcon}>
-                <Text style={styles.operatorIconText}>
-                    {operator.logo || operator.name.charAt(0)}
-                </Text>
+                {operator.operator_image ? (
+                    <Image source={{ uri: operator.operator_image }} style={styles.operatorIconImage} />
+                ) : (
+                    <Text style={styles.operatorIconText}>
+                        {operator.name.charAt(0)}
+                    </Text>
+                )}
             </View>
             <View style={styles.operatorDetails}>
                 <Text style={styles.operatorName}>{operator.name}</Text>
@@ -869,6 +873,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: SPACING.sm,
+    },
+    operatorIconImage: {
+        width: 32,
+        height: 32,
+        borderRadius: RADIUS.base,
     },
     operatorIconText: {
         fontSize: TYPOGRAPHY.fontSizes.lg,

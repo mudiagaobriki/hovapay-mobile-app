@@ -1,4 +1,4 @@
-// app/bills/sports-betting.tsx - Sports Betting Screen
+// app/bills/sports-betting.tsx - Bet Wallet Funding Screen
 import React, { useState, useEffect } from 'react';
 import {
     StyleSheet,
@@ -8,11 +8,9 @@ import {
     Dimensions,
     SafeAreaView,
     StatusBar,
-    Image,
     Alert,
     TextInput,
     Modal,
-    FlatList,
 } from 'react-native';
 import { Text } from 'native-base';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,83 +19,127 @@ import { useRouter } from 'expo-router';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import {
-    useGetSportsQuery,
-    useGetLeaguesQuery,
-    useGetMatchesQuery,
-    usePlaceBetMutation,
+    useGetSupportedBettingPlatformsQuery,
+    useVerifyBettingAccountMutation,
+    useFundBettingWalletMutation,
     useGetWalletBalanceQuery,
-} from '@/store/api/enhancedBillsApi';
+} from '@/store/api/betWalletApi'; // You'll need to create this API
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
 const { width } = Dimensions.get('window');
 
-interface BetSelection {
-    matchId: string;
-    homeTeam: string;
-    awayTeam: string;
-    market: string;
-    selection: string;
-    odds: number;
-    kickoffTime?: string;
+interface BettingPlatform {
+    id: string;
+    name: string;
+    logo: string;
+    color: string;
+    minAmount: number;
+    maxAmount: number;
+    fundingTypes: string[];
+    website: string;
 }
 
-interface BetSlip {
-    selections: BetSelection[];
-    betType: 'single' | 'accumulator';
-    stake: number;
-    potentialWinnings: number;
-    totalOdds: number;
+interface VerifiedAccount {
+    accountName: string;
+    accountId: string;
+    platform: string;
+    verified: boolean;
+    minAmount: number;
+    maxAmount: number;
 }
 
-const BetSchema = Yup.object().shape({
-    stake: Yup.number()
-        .min(50, 'Minimum stake is ₦50')
-        .max(1000000, 'Maximum stake is ₦1,000,000')
-        .required('Stake is required'),
+const BetWalletSchema = Yup.object().shape({
+    platform: Yup.string().required('Please select a betting platform'),
+    accountIdentifier: Yup.string().required('Account username/email is required'),
+    amount: Yup.number()
+        .min(100, 'Minimum funding amount is ₦100')
+        .max(500000, 'Maximum funding amount is ₦500,000')
+        .required('Amount is required'),
+    customerPhone: Yup.string().optional(),
 });
 
-const quickStakes = [100, 500, 1000, 2000, 5000, 10000];
+const quickAmounts = [1000, 2000, 5000, 10000, 20000, 50000];
 
-export default function SportsBettingScreen() {
+export default function BetWalletFundingScreen() {
     const router = useRouter();
-    const [selectedSport, setSelectedSport] = useState<string>('');
-    const [selectedLeague, setSelectedLeague] = useState<string>('');
-    const [betSlip, setBetSlip] = useState<BetSlip>({
-        selections: [],
-        betType: 'single',
-        stake: 0,
-        potentialWinnings: 0,
-        totalOdds: 1,
-    });
-    const [showBetSlip, setShowBetSlip] = useState(false);
-    const [selectedBookmaker, setSelectedBookmaker] = useState<string>('bet9ja');
+    const [selectedPlatform, setSelectedPlatform] = useState<BettingPlatform | null>(null);
+    const [verifiedAccount, setVerifiedAccount] = useState<VerifiedAccount | null>(null);
+    const [showPlatformModal, setShowPlatformModal] = useState(false);
+    const [fundingType, setFundingType] = useState<'instant' | 'voucher' | 'direct'>('instant');
 
-    // API queries
-    const { data: sportsData, isLoading: sportsLoading } = useGetSportsQuery();
-    const { data: leaguesData, isLoading: leaguesLoading } = useGetLeaguesQuery(selectedSport, {
-        skip: !selectedSport,
-    });
-    const { data: matchesData, isLoading: matchesLoading } = useGetMatchesQuery(
-        { sportId: selectedSport, leagueId: selectedLeague },
-        { skip: !selectedSport }
-    );
+    // API hooks
+    const { data: platformsData, isLoading: platformsLoading } = useGetSupportedBettingPlatformsQuery();
     const { data: walletData } = useGetWalletBalanceQuery();
-    const [placeBet, { isLoading: placingBet }] = usePlaceBetMutation();
+    const [verifyAccount, { isLoading: verifying }] = useVerifyBettingAccountMutation();
+    const [fundWallet, { isLoading: funding }] = useFundBettingWalletMutation();
 
-    const sports = sportsData?.data || [];
-    const leagues = leaguesData?.data || [];
-    const matches = matchesData?.data || [];
+    const platforms = platformsData?.data || [];
 
-    const bookmakers = [
-        { id: 'bet9ja', name: 'Bet9ja', logo: '🥇' },
-        { id: 'sportybet', name: 'SportyBet', logo: '⚽' },
-        { id: 'nairabet', name: 'NairaBet', logo: '🎯' },
-        { id: 'betway', name: 'Betway', logo: '🏆' },
+    // Default platforms if API not available
+    const defaultPlatforms: BettingPlatform[] = [
+        {
+            id: 'bet9ja',
+            name: 'Bet9ja',
+            logo: '🥇',
+            color: '#006838',
+            minAmount: 100,
+            maxAmount: 500000,
+            fundingTypes: ['instant', 'voucher'],
+            website: 'https://bet9ja.com'
+        },
+        {
+            id: 'sportybet',
+            name: 'SportyBet',
+            logo: '⚽',
+            color: '#ff6b35',
+            minAmount: 100,
+            maxAmount: 200000,
+            fundingTypes: ['instant', 'voucher'],
+            website: 'https://sportybet.com'
+        },
+        {
+            id: 'nairabet',
+            name: 'NairaBet',
+            logo: '🎯',
+            color: '#1e3a8a',
+            minAmount: 100,
+            maxAmount: 1000000,
+            fundingTypes: ['instant', 'direct'],
+            website: 'https://nairabet.com'
+        },
+        {
+            id: 'betway',
+            name: 'Betway',
+            logo: '🏆',
+            color: '#00a859',
+            minAmount: 100,
+            maxAmount: 500000,
+            fundingTypes: ['instant', 'voucher'],
+            website: 'https://betway.com.ng'
+        },
+        {
+            id: '1xbet',
+            name: '1xBet',
+            logo: '🎲',
+            color: '#1f5582',
+            minAmount: 100,
+            maxAmount: 500000,
+            fundingTypes: ['instant', 'direct'],
+            website: 'https://1xbet.com.ng'
+        },
+        {
+            id: 'betking',
+            name: 'BetKing',
+            logo: '👑',
+            color: '#ff9500',
+            minAmount: 100,
+            maxAmount: 500000,
+            fundingTypes: ['instant', 'voucher'],
+            website: 'https://betking.com'
+        }
     ];
 
-    useEffect(() => {
-        calculatePotentialWinnings();
-    }, [betSlip.selections, betSlip.stake, betSlip.betType]);
+    const availablePlatforms = platforms.length > 0 ? platforms : defaultPlatforms;
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-NG', {
@@ -107,103 +149,62 @@ export default function SportsBettingScreen() {
         }).format(amount);
     };
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-NG', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    const handleVerifyAccount = async (accountIdentifier: string, customerPhone?: string) => {
+        if (!selectedPlatform) return;
 
-    const addToBetSlip = (match: any, market: any, selection: any) => {
-        const newSelection: BetSelection = {
-            matchId: match.id,
-            homeTeam: match.homeTeam,
-            awayTeam: match.awayTeam,
-            market: market.name,
-            selection: selection.name,
-            odds: selection.odds,
-            kickoffTime: match.kickoffTime,
-        };
+        try {
+            const result = await verifyAccount({
+                platform: selectedPlatform.id as any,
+                accountIdentifier,
+                customerPhone
+            }).unwrap();
 
-        // Check if selection already exists
-        const existingIndex = betSlip.selections.findIndex(
-            (s) => s.matchId === newSelection.matchId && s.market === newSelection.market
-        );
-
-        let updatedSelections = [...betSlip.selections];
-        if (existingIndex >= 0) {
-            // Replace existing selection
-            updatedSelections[existingIndex] = newSelection;
-        } else {
-            // Add new selection
-            updatedSelections.push(newSelection);
+            if (result.success) {
+                setVerifiedAccount(result.data);
+                Alert.alert('Account Verified', `Account verified: ${result.data.accountName}`);
+            } else {
+                Alert.alert('Verification Failed', result.message || 'Could not verify account');
+            }
+        } catch (error: any) {
+            console.error('Account verification error:', error);
+            Alert.alert('Verification Error', error.data?.message || 'Account verification failed');
         }
-
-        // If more than one selection, switch to accumulator
-        const newBetType = updatedSelections.length > 1 ? 'accumulator' : 'single';
-
-        setBetSlip({
-            ...betSlip,
-            selections: updatedSelections,
-            betType: newBetType,
-        });
-
-        Alert.alert('Added to Bet Slip', `${selection.name} added successfully`);
     };
 
-    const removeFromBetSlip = (matchId: string, market: string) => {
-        const updatedSelections = betSlip.selections.filter(
-            (s) => !(s.matchId === matchId && s.market === market)
-        );
+    const handleFundWallet = async (values: any) => {
+        console.log('🚀 === FUND WALLET DEBUG START ===');
+        console.log('🚀 handleFundWallet called with values:', JSON.stringify(values, null, 2));
+        console.log('🚀 selectedPlatform:', selectedPlatform);
+        console.log('🚀 verifiedAccount:', verifiedAccount);
+        console.log('🚀 fundingType:', fundingType);
+        console.log('🚀 walletData:', walletData);
 
-        const newBetType = updatedSelections.length > 1 ? 'accumulator' : 'single';
-
-        setBetSlip({
-            ...betSlip,
-            selections: updatedSelections,
-            betType: newBetType,
-        });
-    };
-
-    const calculatePotentialWinnings = () => {
-        if (betSlip.selections.length === 0 || betSlip.stake === 0) {
-            setBetSlip(prev => ({ ...prev, potentialWinnings: 0, totalOdds: 1 }));
+        // STEP 1: Check required data
+        if (!selectedPlatform) {
+            console.log('❌ Missing selectedPlatform');
+            Alert.alert('Error', 'Please select a platform first');
             return;
         }
 
-        let totalOdds = 1;
-        betSlip.selections.forEach(selection => {
-            totalOdds *= selection.odds;
-        });
-
-        const potentialWinnings = betSlip.stake * totalOdds;
-
-        setBetSlip(prev => ({
-            ...prev,
-            potentialWinnings,
-            totalOdds,
-        }));
-    };
-
-    const handlePlaceBet = async () => {
-        if (betSlip.selections.length === 0) {
-            Alert.alert('Error', 'Please add at least one selection to your bet slip');
+        if (!verifiedAccount) {
+            console.log('❌ Missing verifiedAccount');
+            Alert.alert('Error', 'Please verify your account first');
             return;
         }
 
-        if (betSlip.stake < 50) {
-            Alert.alert('Error', 'Minimum stake is ₦50');
-            return;
-        }
+        console.log('✅ Platform and account verification passed');
 
-        if (walletData && betSlip.stake > walletData.data.balance) {
-            const shortfall = betSlip.stake - walletData.data.balance;
+        // STEP 2: Check wallet balance
+        if (walletData && values.amount > walletData.data.balance) {
+            console.log('❌ Insufficient wallet balance:', {
+                requested: values.amount,
+                available: walletData.data.balance,
+                shortfall: values.amount - walletData.data.balance
+            });
+            const shortfall = values.amount - walletData.data.balance;
             Alert.alert(
                 'Insufficient Balance',
-                `You need ${formatCurrency(shortfall)} more to place this bet.`,
+                `You need ${formatCurrency(shortfall)} more to fund this betting wallet.`,
                 [
                     { text: 'Cancel', style: 'cancel' },
                     {
@@ -215,358 +216,181 @@ export default function SportsBettingScreen() {
             return;
         }
 
+        console.log('✅ Wallet balance check passed');
+
         try {
-            const betData = {
-                betType: betSlip.betType,
-                sport: selectedSport,
-                league: selectedLeague,
-                matches: betSlip.selections,
-                stake: betSlip.stake,
-                potentialWinnings: betSlip.potentialWinnings,
-                totalOdds: betSlip.totalOdds,
-                bookmaker: selectedBookmaker as any,
+            console.log('🛠️ Preparing funding data...');
+
+            // STEP 3: Prepare funding data
+            const fundingData = {
+                platform: selectedPlatform.id as any,
+                accountIdentifier: values.accountIdentifier,
+                accountName: verifiedAccount.accountName,
+                amount: Number(values.amount), // Ensure it's a number
+                fundingType,
                 paymentMethod: 'wallet' as const,
+                customerPhone: values.customerPhone || '',
+                description: `Fund ${selectedPlatform.name} wallet`
             };
 
-            const result = await placeBet(betData).unwrap();
+            console.log('📤 Final funding data:', JSON.stringify(fundingData, null, 2));
 
-            Alert.alert(
-                'Bet Placed Successfully!',
-                `Your bet has been placed with ${selectedBookmaker}. Bet slip: ${result.data.betSlip}`,
-                [
-                    {
-                        text: 'View Receipt',
-                        onPress: () => {
-                            router.push({
-                                pathname: '/bills/receipt',
-                                params: {
-                                    transactionRef: result.data.transactionRef,
-                                    type: 'sports_betting',
-                                    amount: betSlip.stake.toString(),
-                                    status: 'successful',
-                                }
-                            });
+            // STEP 4: Validate funding data
+            if (!fundingData.platform) {
+                throw new Error('Platform is required');
+            }
+            if (!fundingData.accountIdentifier) {
+                throw new Error('Account identifier is required');
+            }
+            if (!fundingData.accountName) {
+                throw new Error('Account name is required');
+            }
+            if (!fundingData.amount || fundingData.amount <= 0) {
+                throw new Error('Valid amount is required');
+            }
+
+            console.log('✅ Funding data validation passed');
+
+            // STEP 5: Show loading state
+            console.log('🔄 Starting API call...');
+
+            const result = await fundWallet(fundingData).unwrap();
+
+            console.log('📥 === API RESPONSE RECEIVED ===');
+            console.log('Response success:', result?.success);
+            console.log('Response data:', JSON.stringify(result, null, 2));
+
+            if (result && result.success) {
+                console.log('✅ === FUNDING SUCCESSFUL ===');
+                Alert.alert(
+                    'Wallet Funded Successfully!',
+                    `₦${values.amount.toLocaleString()} has been sent to your ${selectedPlatform.name} account.`,
+                    [
+                        {
+                            text: 'View Receipt',
+                            onPress: () => {
+                                router.push({
+                                    pathname: '/bills/receipt',
+                                    params: {
+                                        transactionRef: result.data?.transactionRef || 'unknown',
+                                        type: 'bet_wallet_funding',
+                                        amount: values.amount.toString(),
+                                        status: 'successful',
+                                    }
+                                });
+                            }
+                        },
+                        {
+                            text: 'Fund Another',
+                            onPress: () => {
+                                setSelectedPlatform(null);
+                                setVerifiedAccount(null);
+                            }
                         }
-                    },
-                    {
-                        text: 'Place Another Bet',
-                        onPress: () => {
-                            setBetSlip({
-                                selections: [],
-                                betType: 'single',
-                                stake: 0,
-                                potentialWinnings: 0,
-                                totalOdds: 1,
-                            });
-                            setShowBetSlip(false);
-                        }
-                    }
-                ]
-            );
+                    ]
+                );
+            } else {
+                console.log('❌ === FUNDING FAILED - SUCCESS FALSE ===');
+                console.log('Failure message:', result?.message);
+                Alert.alert('Funding Failed', result?.message || 'Transaction was not successful');
+            }
         } catch (error: any) {
-            console.error('Error placing bet:', error);
-            Alert.alert('Bet Failed', error.data?.message || 'Something went wrong. Please try again.');
+            console.log('💥 === FUNDING ERROR CAUGHT ===');
+            console.error('Error type:', typeof error);
+            console.error('Error name:', error?.name);
+            console.error('Error message:', error?.message);
+            console.error('Error status:', error?.status);
+            console.error('Error data:', error?.data);
+            console.error('Error originalStatus:', error?.originalStatus);
+            console.error('Full error object:', JSON.stringify(error, null, 2));
+
+            let errorMessage = 'Something went wrong. Please try again.';
+
+            // Handle RTK Query errors
+            if (error?.data) {
+                if (typeof error.data === 'string') {
+                    errorMessage = error.data;
+                } else if (error.data?.message) {
+                    errorMessage = error.data.message;
+                } else if (error.data?.error) {
+                    errorMessage = error.data.error;
+                }
+            } else if (error?.message) {
+                errorMessage = error.message;
+            }
+
+            // Handle specific error types
+            if (error?.status === 404) {
+                errorMessage = 'Service not available. Please try again later.';
+            } else if (error?.status === 500) {
+                errorMessage = 'Server error. Please try again later.';
+            } else if (error?.originalStatus === 'FETCH_ERROR') {
+                errorMessage = 'Network error. Please check your connection.';
+            } else if (error?.originalStatus === 'PARSING_ERROR') {
+                errorMessage = 'Response parsing error. Please try again.';
+            } else if (error?.originalStatus === 'TIMEOUT_ERROR') {
+                errorMessage = 'Request timeout. Please try again.';
+            }
+
+            console.log('🚨 Final error message:', errorMessage);
+
+            Alert.alert('Funding Failed', errorMessage);
         }
+
+        console.log('🚀 === FUND WALLET DEBUG END ===');
     };
 
-    const renderSport = (sport: any) => (
-        <TouchableOpacity
-            key={sport.id}
-            style={[
-                styles.sportCard,
-                selectedSport === sport.id && styles.sportCardSelected
-            ]}
-            onPress={() => {
-                setSelectedSport(sport.id);
-                setSelectedLeague('');
-            }}
-        >
-            <Text style={styles.sportIcon}>{sport.icon || '⚽'}</Text>
-            <Text style={[
-                styles.sportName,
-                selectedSport === sport.id && styles.sportNameSelected
-            ]}>
-                {sport.name}
-            </Text>
-        </TouchableOpacity>
-    );
-
-    const renderLeague = (league: any) => (
-        <TouchableOpacity
-            key={league.id}
-            style={[
-                styles.leagueCard,
-                selectedLeague === league.id && styles.leagueCardSelected
-            ]}
-            onPress={() => setSelectedLeague(league.id)}
-        >
-            <Text style={styles.leagueName}>{league.name}</Text>
-            <Text style={styles.leagueCountry}>{league.country}</Text>
-        </TouchableOpacity>
-    );
-
-    const renderMatch = (match: any) => (
-        <View key={match.id} style={styles.matchCard}>
-            <View style={styles.matchHeader}>
-                <Text style={styles.matchTeams}>
-                    {match.homeTeam} vs {match.awayTeam}
-                </Text>
-                <Text style={styles.matchTime}>
-                    {formatDate(match.kickoffTime)}
-                </Text>
-            </View>
-
-            {match.markets?.slice(0, 3).map((market: any) => (
-                <View key={market.id} style={styles.marketContainer}>
-                    <Text style={styles.marketName}>{market.name}</Text>
-                    <View style={styles.selectionsContainer}>
-                        {market.selections?.map((selection: any) => (
-                            <TouchableOpacity
-                                key={selection.id}
-                                style={[
-                                    styles.selectionButton,
-                                    betSlip.selections.some(s =>
-                                        s.matchId === match.id &&
-                                        s.market === market.name &&
-                                        s.selection === selection.name
-                                    ) && styles.selectionButtonSelected
-                                ]}
-                                onPress={() => addToBetSlip(match, market, selection)}
-                            >
-                                <Text style={[
-                                    styles.selectionName,
-                                    betSlip.selections.some(s =>
-                                        s.matchId === match.id &&
-                                        s.market === market.name &&
-                                        s.selection === selection.name
-                                    ) && styles.selectionNameSelected
-                                ]}>
-                                    {selection.name}
-                                </Text>
-                                <Text style={[
-                                    styles.selectionOdds,
-                                    betSlip.selections.some(s =>
-                                        s.matchId === match.id &&
-                                        s.market === market.name &&
-                                        s.selection === selection.name
-                                    ) && styles.selectionOddsSelected
-                                ]}>
-                                    {selection.odds.toFixed(2)}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-            ))}
-        </View>
-    );
-
-    const BetSlipModal = () => (
+    const PlatformModal = () => (
         <Modal
-            visible={showBetSlip}
+            visible={showPlatformModal}
             animationType="slide"
             presentationStyle="pageSheet"
-            onRequestClose={() => setShowBetSlip(false)}
+            onRequestClose={() => setShowPlatformModal(false)}
         >
-            <SafeAreaView style={styles.betSlipContainer}>
-                <View style={styles.betSlipHeader}>
-                    <Text style={styles.betSlipTitle}>Bet Slip</Text>
+            <SafeAreaView style={styles.modalContainer}>
+                <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Select Betting Platform</Text>
                     <TouchableOpacity
-                        onPress={() => setShowBetSlip(false)}
+                        onPress={() => setShowPlatformModal(false)}
                         style={styles.closeButton}
                     >
                         <MaterialIcons name="close" size={24} color={COLORS.textPrimary} />
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.betSlipContent}>
-                    {/* Bookmaker Selection */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Select Bookmaker</Text>
-                        <View style={styles.bookmakersGrid}>
-                            {bookmakers.map(bookmaker => (
-                                <TouchableOpacity
-                                    key={bookmaker.id}
-                                    style={[
-                                        styles.bookmakerCard,
-                                        selectedBookmaker === bookmaker.id && styles.bookmakerCardSelected
-                                    ]}
-                                    onPress={() => setSelectedBookmaker(bookmaker.id)}
-                                >
-                                    <Text style={styles.bookmakerLogo}>{bookmaker.logo}</Text>
-                                    <Text style={styles.bookmakerName}>{bookmaker.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
-
-                    {/* Selections */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>
-                            Your Selections ({betSlip.selections.length})
-                        </Text>
-                        {betSlip.selections.map((selection, index) => (
-                            <View key={`${selection.matchId}-${selection.market}`} style={styles.selectionCard}>
-                                <View style={styles.selectionInfo}>
-                                    <Text style={styles.selectionTeams}>
-                                        {selection.homeTeam} vs {selection.awayTeam}
-                                    </Text>
-                                    <Text style={styles.selectionMarket}>
-                                        {selection.market}: {selection.selection}
-                                    </Text>
-                                    <Text style={styles.selectionOddsDisplay}>
-                                        Odds: {selection.odds.toFixed(2)}
-                                    </Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={styles.removeSelectionButton}
-                                    onPress={() => removeFromBetSlip(selection.matchId, selection.market)}
-                                >
-                                    <MaterialIcons name="close" size={20} color={COLORS.error} />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
-
-                        {betSlip.selections.length === 0 && (
-                            <View style={styles.emptySelections}>
-                                <MaterialIcons name="sports-soccer" size={48} color={COLORS.textTertiary} />
-                                <Text style={styles.emptySelectionsText}>No selections yet</Text>
-                                <Text style={styles.emptySelectionsSubtext}>
-                                    Add selections from matches to build your bet slip
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Bet Type */}
-                    {betSlip.selections.length > 0 && (
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Bet Type</Text>
-                            <View style={styles.betTypeButtons}>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.betTypeButton,
-                                        betSlip.betType === 'single' && styles.betTypeButtonSelected
-                                    ]}
-                                    onPress={() => setBetSlip(prev => ({ ...prev, betType: 'single' }))}
-                                    disabled={betSlip.selections.length > 1}
-                                >
-                                    <Text style={[
-                                        styles.betTypeButtonText,
-                                        betSlip.betType === 'single' && styles.betTypeButtonTextSelected
-                                    ]}>
-                                        Single
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.betTypeButton,
-                                        betSlip.betType === 'accumulator' && styles.betTypeButtonSelected
-                                    ]}
-                                    onPress={() => setBetSlip(prev => ({ ...prev, betType: 'accumulator' }))}
-                                    disabled={betSlip.selections.length < 2}
-                                >
-                                    <Text style={[
-                                        styles.betTypeButtonText,
-                                        betSlip.betType === 'accumulator' && styles.betTypeButtonTextSelected
-                                    ]}>
-                                        Accumulator
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Stake Input */}
-                    {betSlip.selections.length > 0 && (
-                        <Formik
-                            initialValues={{ stake: betSlip.stake }}
-                            validationSchema={BetSchema}
-                            onSubmit={(values) => {
-                                setBetSlip(prev => ({ ...prev, stake: values.stake }));
+                <ScrollView style={styles.platformsList}>
+                    {availablePlatforms.map((platform) => (
+                        <TouchableOpacity
+                            key={platform.id}
+                            style={[
+                                styles.platformCard,
+                                selectedPlatform?.id === platform.id && styles.platformCardSelected
+                            ]}
+                            onPress={() => {
+                                setSelectedPlatform(platform);
+                                setVerifiedAccount(null);
+                                setShowPlatformModal(false);
                             }}
                         >
-                            {({ values, errors, touched, handleChange, handleBlur, setFieldValue }) => (
-                                <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Stake Amount</Text>
-
-                                    {/* Quick Stakes */}
-                                    <View style={styles.quickStakes}>
-                                        {quickStakes.map(amount => (
-                                            <TouchableOpacity
-                                                key={amount}
-                                                style={[
-                                                    styles.quickStakeButton,
-                                                    values.stake === amount && styles.quickStakeButtonSelected
-                                                ]}
-                                                onPress={() => {
-                                                    setFieldValue('stake', amount);
-                                                    setBetSlip(prev => ({ ...prev, stake: amount }));
-                                                }}
-                                            >
-                                                <Text style={[
-                                                    styles.quickStakeText,
-                                                    values.stake === amount && styles.quickStakeTextSelected
-                                                ]}>
-                                                    ₦{amount.toLocaleString()}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-
-                                    {/* Custom Stake Input */}
-                                    <TextInput
-                                        style={styles.stakeInput}
-                                        placeholder="Enter stake amount"
-                                        value={values.stake ? values.stake.toString() : ''}
-                                        onChangeText={(text) => {
-                                            const numericValue = parseInt(text.replace(/[^0-9]/g, '')) || 0;
-                                            setFieldValue('stake', numericValue);
-                                            setBetSlip(prev => ({ ...prev, stake: numericValue }));
-                                        }}
-                                        onBlur={handleBlur('stake')}
-                                        keyboardType="numeric"
-                                    />
-                                    {touched.stake && errors.stake && (
-                                        <Text style={styles.errorText}>{errors.stake}</Text>
-                                    )}
-
-                                    {/* Betting Summary */}
-                                    <View style={styles.bettingSummary}>
-                                        <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Total Odds:</Text>
-                                            <Text style={styles.summaryValue}>{betSlip.totalOdds.toFixed(2)}</Text>
-                                        </View>
-                                        <View style={styles.summaryRow}>
-                                            <Text style={styles.summaryLabel}>Stake:</Text>
-                                            <Text style={styles.summaryValue}>{formatCurrency(betSlip.stake)}</Text>
-                                        </View>
-                                        <View style={[styles.summaryRow, styles.summaryRowFinal]}>
-                                            <Text style={styles.summaryLabelFinal}>Potential Winnings:</Text>
-                                            <Text style={styles.summaryValueFinal}>
-                                                {formatCurrency(betSlip.potentialWinnings)}
-                                            </Text>
-                                        </View>
-                                    </View>
-
-                                    {/* Place Bet Button */}
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.placeBetButton,
-                                            (placingBet || betSlip.stake < 50) && styles.placeBetButtonDisabled
-                                        ]}
-                                        onPress={handlePlaceBet}
-                                        disabled={placingBet || betSlip.stake < 50}
-                                    >
-                                        <MaterialIcons name="sports-esports" size={24} color={COLORS.textInverse} />
-                                        <Text style={styles.placeBetButtonText}>
-                                            {placingBet ? 'Placing Bet...' : `Place Bet - ${formatCurrency(betSlip.stake)}`}
-                                        </Text>
-                                    </TouchableOpacity>
+                            <View style={styles.platformInfo}>
+                                <Text style={styles.platformLogo}>{platform.logo}</Text>
+                                <View style={styles.platformDetails}>
+                                    <Text style={styles.platformName}>{platform.name}</Text>
+                                    <Text style={styles.platformLimits}>
+                                        Min: {formatCurrency(platform.minAmount)} • Max: {formatCurrency(platform.maxAmount)}
+                                    </Text>
+                                    <Text style={styles.platformFunding}>
+                                        {platform.fundingTypes.join(', ')} funding
+                                    </Text>
                                 </View>
-                            )}
-                        </Formik>
-                    )}
+                            </View>
+                            <MaterialIcons
+                                name="chevron-right"
+                                size={24}
+                                color={COLORS.textSecondary}
+                            />
+                        </TouchableOpacity>
+                    ))}
                 </ScrollView>
             </SafeAreaView>
         </Modal>
@@ -587,23 +411,13 @@ export default function SportsBettingScreen() {
                     >
                         <MaterialIcons name="arrow-back" size={24} color={COLORS.textInverse} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Sports Betting</Text>
-                    <TouchableOpacity
-                        style={styles.betSlipIcon}
-                        onPress={() => setShowBetSlip(true)}
-                    >
-                        <MaterialIcons name="receipt" size={24} color={COLORS.textInverse} />
-                        {betSlip.selections.length > 0 && (
-                            <View style={styles.betSlipBadge}>
-                                <Text style={styles.betSlipBadgeText}>{betSlip.selections.length}</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Fund Betting Wallet</Text>
+                    <View style={styles.placeholder} />
                 </View>
 
                 {walletData && (
                     <View style={styles.balanceCard}>
-                        <Text style={styles.balanceLabel}>Wallet Balance</Text>
+                        <Text style={styles.balanceLabel}>Your Wallet Balance</Text>
                         <Text style={styles.balanceAmount}>
                             {formatCurrency(walletData.data.balance)}
                         </Text>
@@ -612,79 +426,320 @@ export default function SportsBettingScreen() {
             </LinearGradient>
 
             <View style={styles.contentContainer}>
-                <ScrollView style={styles.scrollContainer}>
-                    {/* Sports Selection */}
+                <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+
+                    {/* Platform Selection */}
                     <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Select Sport</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportsContainer}>
-                            {sports.map(renderSport)}
-                        </ScrollView>
+                        <Text style={styles.sectionTitle}>1. Select Betting Platform</Text>
+                        <TouchableOpacity
+                            style={styles.platformSelector}
+                            onPress={() => setShowPlatformModal(true)}
+                        >
+                            {selectedPlatform ? (
+                                <View style={styles.selectedPlatformInfo}>
+                                    <Text style={styles.selectedPlatformLogo}>{selectedPlatform.logo}</Text>
+                                    <View style={styles.selectedPlatformDetails}>
+                                        <Text style={styles.selectedPlatformName}>{selectedPlatform.name}</Text>
+                                        <Text style={styles.selectedPlatformLimits}>
+                                            {formatCurrency(selectedPlatform.minAmount)} - {formatCurrency(selectedPlatform.maxAmount)}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                <Text style={styles.platformSelectorText}>Choose betting platform</Text>
+                            )}
+                            <MaterialIcons name="expand-more" size={24} color={COLORS.textSecondary} />
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Leagues Selection */}
-                    {selectedSport && leagues.length > 0 && (
+                    {/* Account Verification */}
+                    {selectedPlatform && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Select League</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.leaguesContainer}>
-                                {leagues.map(renderLeague)}
-                            </ScrollView>
+                            <Text style={styles.sectionTitle}>2. Verify Your Account</Text>
+
+                            <Formik
+                                initialValues={{
+                                    platform: selectedPlatform?.id || '',
+                                    accountIdentifier: '',
+                                    customerPhone: '',
+                                    amount: 0
+                                }}
+                                validationSchema={BetWalletSchema}
+                                enableReinitialize={true}
+                                onSubmit={async (values, { setSubmitting, setFieldError }) => {
+                                    console.log('📝 === FORM SUBMISSION START ===');
+                                    console.log('📝 Form values:', JSON.stringify(values, null, 2));
+                                    console.log('📝 Selected platform:', selectedPlatform);
+                                    console.log('📝 Verified account:', verifiedAccount);
+                                    console.log('📝 Funding type:', fundingType);
+
+                                    // Validate that platform is selected
+                                    if (!selectedPlatform) {
+                                        console.log('❌ No platform selected in form submission');
+                                        Alert.alert('Error', 'Please select a platform first');
+                                        setSubmitting(false);
+                                        return;
+                                    }
+
+                                    // Validate that account is verified
+                                    if (!verifiedAccount) {
+                                        console.log('❌ No verified account in form submission');
+                                        Alert.alert('Error', 'Please verify your account first');
+                                        setSubmitting(false);
+                                        return;
+                                    }
+
+                                    // Validate amount
+                                    if (!values.amount || values.amount <= 0) {
+                                        console.log('❌ Invalid amount in form submission:', values.amount);
+                                        setFieldError('amount', 'Please enter a valid amount');
+                                        setSubmitting(false);
+                                        return;
+                                    }
+
+                                    // Check minimum amount for platform
+                                    if (values.amount < selectedPlatform.minAmount) {
+                                        console.log('❌ Amount below platform minimum:', {
+                                            amount: values.amount,
+                                            minimum: selectedPlatform.minAmount
+                                        });
+                                        setFieldError('amount', `Minimum amount is ${formatCurrency(selectedPlatform.minAmount)}`);
+                                        setSubmitting(false);
+                                        return;
+                                    }
+
+                                    // Check maximum amount for platform
+                                    if (values.amount > selectedPlatform.maxAmount) {
+                                        console.log('❌ Amount above platform maximum:', {
+                                            amount: values.amount,
+                                            maximum: selectedPlatform.maxAmount
+                                        });
+                                        setFieldError('amount', `Maximum amount is ${formatCurrency(selectedPlatform.maxAmount)}`);
+                                        setSubmitting(false);
+                                        return;
+                                    }
+
+                                    console.log('✅ Form validation passed, calling handleFundWallet');
+
+                                    setSubmitting(true);
+                                    try {
+                                        await handleFundWallet(values);
+                                    } catch (error) {
+                                        console.error('💥 Form submission error:', error);
+                                        Alert.alert('Error', 'Form submission failed');
+                                    } finally {
+                                        setSubmitting(false);
+                                    }
+
+                                    console.log('📝 === FORM SUBMISSION END ===');
+                                }}
+                            >
+                                {({ values, errors, touched, handleChange, handleBlur, setFieldValue, handleSubmit, isSubmitting, isValid }) => (
+                                    <View>
+                                        {/* Debug Info */}
+                                        {__DEV__ && (
+                                            <View style={{ padding: 10, backgroundColor: '#f0f0f0', margin: 10 }}>
+                                                <Text style={{ fontSize: 12, fontFamily: 'monospace' }}>
+                                                    DEBUG: Valid={isValid ? 'YES' : 'NO'},
+                                                    Submitting={isSubmitting ? 'YES' : 'NO'},
+                                                    Amount={values.amount},
+                                                    Platform={selectedPlatform?.name || 'NONE'},
+                                                    Account={verifiedAccount?.accountName || 'NONE'}
+                                                </Text>
+                                                {Object.keys(errors).length > 0 && (
+                                                    <Text style={{ fontSize: 12, color: 'red' }}>
+                                                        Errors: {JSON.stringify(errors)}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                        )}
+
+                                        {/* Account Identifier Input */}
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>
+                                                {selectedPlatform?.name || 'Platform'} Username/Email
+                                            </Text>
+                                            <TextInput
+                                                style={[
+                                                    styles.textInput,
+                                                    touched.accountIdentifier && errors.accountIdentifier && styles.textInputError
+                                                ]}
+                                                placeholder={`Enter your ${selectedPlatform?.name || 'platform'} username or email`}
+                                                value={values.accountIdentifier}
+                                                onChangeText={handleChange('accountIdentifier')}
+                                                onBlur={handleBlur('accountIdentifier')}
+                                                autoCapitalize="none"
+                                            />
+                                            {touched.accountIdentifier && errors.accountIdentifier && (
+                                                <Text style={styles.errorText}>{errors.accountIdentifier}</Text>
+                                            )}
+                                        </View>
+
+                                        {/* Phone Number Input */}
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>
+                                                Phone Number (Optional)
+                                            </Text>
+                                            <TextInput
+                                                style={styles.textInput}
+                                                placeholder="Enter phone number"
+                                                value={values.customerPhone}
+                                                onChangeText={handleChange('customerPhone')}
+                                                onBlur={handleBlur('customerPhone')}
+                                                keyboardType="phone-pad"
+                                            />
+                                        </View>
+
+                                        {/* Verify Button */}
+                                        {!verifiedAccount && values.accountIdentifier && (
+                                            <TouchableOpacity
+                                                style={[styles.verifyButton, verifying && styles.verifyButtonDisabled]}
+                                                onPress={() => {
+                                                    console.log('🔍 Verify button pressed');
+                                                    handleVerifyAccount(values.accountIdentifier, values.customerPhone);
+                                                }}
+                                                disabled={verifying}
+                                            >
+                                                <MaterialIcons
+                                                    name="verified-user"
+                                                    size={20}
+                                                    color={COLORS.textInverse}
+                                                />
+                                                <Text style={styles.verifyButtonText}>
+                                                    {verifying ? 'Verifying...' : 'Verify Account'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {/* Verified Account Display */}
+                                        {verifiedAccount && (
+                                            <View style={styles.verifiedAccount}>
+                                                <MaterialIcons name="check-circle" size={24} color={COLORS.success} />
+                                                <View style={styles.verifiedAccountInfo}>
+                                                    <Text style={styles.verifiedAccountName}>{verifiedAccount.accountName}</Text>
+                                                    <Text style={styles.verifiedAccountPlatform}>
+                                                        {selectedPlatform?.name} Account Verified
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                        )}
+
+                                        {/* Rest of your form components... */}
+                                        {/* Amount Selection and Fund Button */}
+                                        {verifiedAccount && (
+                                            <View style={styles.section}>
+                                                <Text style={styles.sectionTitle}>4. Enter Amount</Text>
+
+                                                {/* Custom Amount Input */}
+                                                <TextInput
+                                                    style={[
+                                                        styles.amountInput,
+                                                        touched.amount && errors.amount && styles.textInputError
+                                                    ]}
+                                                    placeholder={`Enter amount (${formatCurrency(selectedPlatform?.minAmount || 100)} - ${formatCurrency(selectedPlatform?.maxAmount || 500000)})`}
+                                                    value={values.amount ? values.amount.toString() : ''}
+                                                    onChangeText={(text) => {
+                                                        console.log('💰 Amount input changed:', text);
+                                                        const numericValue = parseInt(text.replace(/[^0-9]/g, '')) || 0;
+                                                        console.log('💰 Parsed numeric value:', numericValue);
+                                                        setFieldValue('amount', numericValue);
+                                                    }}
+                                                    keyboardType="numeric"
+                                                />
+                                                {touched.amount && errors.amount && (
+                                                    <Text style={styles.errorText}>{errors.amount}</Text>
+                                                )}
+
+                                                {/* Fund Wallet Button - ENHANCED DEBUG */}
+                                                {values.amount >= (selectedPlatform?.minAmount || 100) && (
+                                                    <TouchableOpacity
+                                                        style={[
+                                                            styles.fundWalletButton,
+                                                            (funding || isSubmitting || !isValid) && styles.fundWalletButtonDisabled
+                                                        ]}
+                                                        onPress={() => {
+                                                            console.log('🔥 === FUND BUTTON PRESSED ===');
+                                                            console.log('🔥 Current form values:', values);
+                                                            console.log('🔥 Is submitting:', isSubmitting);
+                                                            console.log('🔥 Is funding:', funding);
+                                                            console.log('🔥 Is valid:', isValid);
+                                                            console.log('🔥 Errors:', errors);
+                                                            console.log('🔥 Selected platform:', selectedPlatform);
+                                                            console.log('🔥 Verified account:', verifiedAccount);
+                                                            console.log('🔥 About to call handleSubmit...');
+                                                            handleSubmit();
+                                                            console.log('🔥 handleSubmit called');
+                                                        }}
+                                                        disabled={funding || isSubmitting || !isValid}
+                                                    >
+                                                        <MaterialIcons
+                                                            name="account-balance-wallet"
+                                                            size={24}
+                                                            color={COLORS.textInverse}
+                                                        />
+                                                        <Text style={styles.fundWalletButtonText}>
+                                                            {(funding || isSubmitting) ? 'Processing...' : `Fund ${selectedPlatform?.name} Wallet`}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+                                )}
+                            </Formik>
                         </View>
                     )}
 
-                    {/* Matches */}
-                    {selectedSport && matches.length > 0 && (
+                    {/* Popular Platforms */}
+                    {!selectedPlatform && (
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>
-                                {selectedLeague ? `${leagues.find(l => l.id === selectedLeague)?.name} Matches` : 'All Matches'}
-                            </Text>
-                            {matches.map(renderMatch)}
+                            <Text style={styles.sectionTitle}>Popular Betting Platforms</Text>
+                            <View style={styles.popularPlatforms}>
+                                {availablePlatforms.slice(0, 4).map((platform) => (
+                                    <TouchableOpacity
+                                        key={platform.id}
+                                        style={styles.popularPlatformCard}
+                                        onPress={() => {
+                                            setSelectedPlatform(platform);
+                                            setVerifiedAccount(null);
+                                        }}
+                                    >
+                                        <Text style={styles.popularPlatformLogo}>{platform.logo}</Text>
+                                        <Text style={styles.popularPlatformName}>{platform.name}</Text>
+                                        <Text style={styles.popularPlatformMin}>
+                                            Min: {formatCurrency(platform.minAmount)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     )}
 
-                    {/* Loading States */}
-                    {sportsLoading && (
-                        <View style={styles.loadingContainer}>
-                            <Text>Loading sports...</Text>
+                    {/* Info Section */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>How It Works</Text>
+                        <View style={styles.infoCards}>
+                            <View style={styles.infoCard}>
+                                <MaterialIcons name="sports-esports" size={24} color={COLORS.primary} />
+                                <Text style={styles.infoTitle}>Choose Platform</Text>
+                                <Text style={styles.infoDesc}>Select your favorite betting platform</Text>
+                            </View>
+                            <View style={styles.infoCard}>
+                                <MaterialIcons name="verified-user" size={24} color={COLORS.primary} />
+                                <Text style={styles.infoTitle}>Verify Account</Text>
+                                <Text style={styles.infoDesc}>Confirm your betting account details</Text>
+                            </View>
+                            <View style={styles.infoCard}>
+                                <MaterialIcons name="payment" size={24} color={COLORS.primary} />
+                                <Text style={styles.infoTitle}>Fund Instantly</Text>
+                                <Text style={styles.infoDesc}>Transfer funds from your wallet</Text>
+                            </View>
                         </View>
-                    )}
-
-                    {selectedSport && leaguesLoading && (
-                        <View style={styles.loadingContainer}>
-                            <Text>Loading leagues...</Text>
-                        </View>
-                    )}
-
-                    {selectedSport && matchesLoading && (
-                        <View style={styles.loadingContainer}>
-                            <Text>Loading matches...</Text>
-                        </View>
-                    )}
-
-                    {/* Empty States */}
-                    {!sportsLoading && sports.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <MaterialIcons name="sports-soccer" size={64} color={COLORS.textTertiary} />
-                            <Text style={styles.emptyStateText}>No sports available</Text>
-                        </View>
-                    )}
-
-                    {selectedSport && !leaguesLoading && leagues.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <MaterialIcons name="emoji-events" size={64} color={COLORS.textTertiary} />
-                            <Text style={styles.emptyStateText}>No leagues available</Text>
-                        </View>
-                    )}
-
-                    {selectedSport && !matchesLoading && matches.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <MaterialIcons name="event" size={64} color={COLORS.textTertiary} />
-                            <Text style={styles.emptyStateText}>No matches available</Text>
-                        </View>
-                    )}
+                    </View>
                 </ScrollView>
             </View>
 
-            <BetSlipModal />
+            <PlatformModal />
         </SafeAreaView>
     );
 }
@@ -713,25 +768,8 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.textInverse,
     },
-    betSlipIcon: {
-        padding: SPACING.xs,
-        position: 'relative',
-    },
-    betSlipBadge: {
-        position: 'absolute',
-        top: 0,
-        right: 0,
-        backgroundColor: COLORS.error,
-        borderRadius: 10,
-        minWidth: 20,
-        height: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    betSlipBadgeText: {
-        color: COLORS.textInverse,
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        fontWeight: TYPOGRAPHY.fontWeights.bold,
+    placeholder: {
+        width: 40,
     },
     balanceCard: {
         backgroundColor: COLORS.withOpacity(COLORS.white, 0.15),
@@ -768,294 +806,50 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
         marginBottom: SPACING.base,
     },
-    sportsContainer: {
-        paddingVertical: SPACING.sm,
-    },
-    sportCard: {
+    platformSelector: {
         backgroundColor: COLORS.backgroundSecondary,
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
-        marginRight: SPACING.base,
-        alignItems: 'center',
-        minWidth: 80,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    sportCardSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primaryBackground,
-    },
-    sportIcon: {
-        fontSize: 24,
-        marginBottom: SPACING.xs,
-    },
-    sportName: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textPrimary,
-        textAlign: 'center',
-    },
-    sportNameSelected: {
-        color: COLORS.primary,
-    },
-    leaguesContainer: {
-        paddingVertical: SPACING.sm,
-    },
-    leagueCard: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        marginRight: SPACING.base,
-        minWidth: 120,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    leagueCardSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primaryBackground,
-    },
-    leagueName: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textPrimary,
-        marginBottom: SPACING.xs,
-    },
-    leagueCountry: {
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        color: COLORS.textSecondary,
-    },
-    matchCard: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        marginBottom: SPACING.base,
-        ...SHADOWS.sm,
-    },
-    matchHeader: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: SPACING.base,
-    },
-    matchTeams: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
-        fontWeight: TYPOGRAPHY.fontWeights.semibold,
-        color: COLORS.textPrimary,
-    },
-    matchTime: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        color: COLORS.textSecondary,
-    },
-    marketContainer: {
-        marginBottom: SPACING.base,
-    },
-    marketName: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-        marginBottom: SPACING.sm,
-    },
-    selectionsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: SPACING.sm,
-    },
-    selectionButton: {
-        backgroundColor: COLORS.background,
-        borderRadius: RADIUS.base,
-        padding: SPACING.sm,
-        minWidth: 80,
-        alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
-    selectionButtonSelected: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    selectionName: {
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        color: COLORS.textSecondary,
-        marginBottom: 2,
-    },
-    selectionNameSelected: {
-        color: COLORS.textInverse,
-    },
-    selectionOdds: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.bold,
-        color: COLORS.textPrimary,
-    },
-    selectionOddsSelected: {
-        color: COLORS.textInverse,
-    },
-    loadingContainer: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.xl,
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.xl,
-    },
-    emptyStateText: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
-        color: COLORS.textSecondary,
-        marginTop: SPACING.base,
-        textAlign: 'center',
-    },
-
-    // Bet Slip Modal Styles
-    betSlipContainer: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    betSlipHeader: {
+    selectedPlatformInfo: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        padding: SPACING.xl,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
     },
-    betSlipTitle: {
-        fontSize: TYPOGRAPHY.fontSizes.lg,
-        fontWeight: TYPOGRAPHY.fontWeights.bold,
-        color: COLORS.textPrimary,
-    },
-    closeButton: {
-        padding: SPACING.xs,
-    },
-    betSlipContent: {
-        flex: 1,
-    },
-    bookmakersGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: SPACING.base,
-    },
-    bookmakerCard: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        alignItems: 'center',
-        minWidth: (width - SPACING.xl * 3) / 2,
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    bookmakerCardSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primaryBackground,
-    },
-    bookmakerLogo: {
+    selectedPlatformLogo: {
         fontSize: 24,
-        marginBottom: SPACING.xs,
+        marginRight: SPACING.base,
     },
-    bookmakerName: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textPrimary,
-    },
-    selectionCard: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        padding: SPACING.base,
-        marginBottom: SPACING.base,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    selectionInfo: {
+    selectedPlatformDetails: {
         flex: 1,
     },
-    selectionTeams: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.semibold,
-        color: COLORS.textPrimary,
-        marginBottom: SPACING.xs,
-    },
-    selectionMarket: {
-        fontSize: TYPOGRAPHY.fontSizes.xs,
-        color: COLORS.textSecondary,
-        marginBottom: SPACING.xs,
-    },
-    selectionOddsDisplay: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.primary,
-    },
-    removeSelectionButton: {
-        padding: SPACING.xs,
-    },
-    emptySelections: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.xl,
-    },
-    emptySelectionsText: {
-        fontSize: TYPOGRAPHY.fontSizes.base,
-        fontWeight: TYPOGRAPHY.fontWeights.medium,
-        color: COLORS.textSecondary,
-        marginTop: SPACING.base,
-    },
-    emptySelectionsSubtext: {
-        fontSize: TYPOGRAPHY.fontSizes.sm,
-        color: COLORS.textTertiary,
-        textAlign: 'center',
-        marginTop: SPACING.xs,
-    },
-    betTypeButtons: {
-        flexDirection: 'row',
-        gap: SPACING.base,
-    },
-    betTypeButton: {
-        flex: 1,
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.lg,
-        paddingVertical: SPACING.base,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    betTypeButtonSelected: {
-        borderColor: COLORS.primary,
-        backgroundColor: COLORS.primaryBackground,
-    },
-    betTypeButtonText: {
+    selectedPlatformName: {
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.medium,
         color: COLORS.textPrimary,
     },
-    betTypeButtonTextSelected: {
-        color: COLORS.primary,
+    selectedPlatformLimits: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
     },
-    quickStakes: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: SPACING.sm,
+    platformSelectorText: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textSecondary,
+    },
+    inputGroup: {
         marginBottom: SPACING.base,
     },
-    quickStakeButton: {
-        backgroundColor: COLORS.backgroundSecondary,
-        borderRadius: RADIUS.base,
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: SPACING.xs,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    quickStakeButtonSelected: {
-        backgroundColor: COLORS.primary,
-        borderColor: COLORS.primary,
-    },
-    quickStakeText: {
+    inputLabel: {
         fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
         color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
     },
-    quickStakeTextSelected: {
-        color: COLORS.textInverse,
-    },
-    stakeInput: {
+    textInput: {
         backgroundColor: COLORS.backgroundSecondary,
         borderRadius: RADIUS.lg,
         borderWidth: 1,
@@ -1063,18 +857,134 @@ const styles = StyleSheet.create({
         padding: SPACING.base,
         fontSize: TYPOGRAPHY.fontSizes.base,
         color: COLORS.textPrimary,
-        marginBottom: SPACING.base,
+    },
+    textInputError: {
+        borderColor: COLORS.error,
     },
     errorText: {
         color: COLORS.error,
         fontSize: TYPOGRAPHY.fontSizes.sm,
         marginTop: SPACING.xs,
     },
-    bettingSummary: {
+    verifyButton: {
+        backgroundColor: COLORS.primary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: SPACING.base,
+    },
+    verifyButtonDisabled: {
+        backgroundColor: COLORS.textTertiary,
+        opacity: 0.6,
+    },
+    verifyButtonText: {
+        color: COLORS.textInverse,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        marginLeft: SPACING.sm,
+    },
+    verifiedAccount: {
+        backgroundColor: COLORS.successBackground,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: SPACING.base,
+    },
+    verifiedAccountInfo: {
+        marginLeft: SPACING.base,
+        flex: 1,
+    },
+    verifiedAccountName: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textPrimary,
+    },
+    verifiedAccountPlatform: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.success,
+        marginTop: 2,
+    },
+    fundingTypes: {
+        flexDirection: 'row',
+        gap: SPACING.sm,
+    },
+    fundingTypeButton: {
+        flex: 1,
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    fundingTypeButtonSelected: {
+        borderColor: COLORS.primary,
+        backgroundColor: COLORS.primaryBackground,
+    },
+    fundingTypeText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textPrimary,
+        marginBottom: 2,
+    },
+    fundingTypeTextSelected: {
+        color: COLORS.primary,
+    },
+    fundingTypeDesc: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+    },
+    fundingTypeDescSelected: {
+        color: COLORS.primary,
+    },
+    quickAmounts: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: SPACING.sm,
+        marginBottom: SPACING.base,
+    },
+    quickAmountButton: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.base,
+        paddingHorizontal: SPACING.base,
+        paddingVertical: SPACING.sm,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        minWidth: (width - SPACING.xl * 2 - SPACING.sm * 2) / 3,
+        alignItems: 'center',
+    },
+    quickAmountButtonSelected: {
+        backgroundColor: COLORS.primary,
+        borderColor: COLORS.primary,
+    },
+    quickAmountText: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textPrimary,
+    },
+    quickAmountTextSelected: {
+        color: COLORS.textInverse,
+    },
+    amountInput: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        padding: SPACING.base,
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.base,
+    },
+    fundingSummary: {
         backgroundColor: COLORS.background,
         borderRadius: RADIUS.lg,
         padding: SPACING.base,
         marginTop: SPACING.base,
+        ...SHADOWS.sm,
     },
     summaryRow: {
         flexDirection: 'row',
@@ -1107,7 +1017,7 @@ const styles = StyleSheet.create({
         fontWeight: TYPOGRAPHY.fontWeights.bold,
         color: COLORS.primary,
     },
-    placeBetButton: {
+    fundWalletButton: {
         backgroundColor: COLORS.primary,
         borderRadius: RADIUS.lg,
         paddingVertical: SPACING.base,
@@ -1117,14 +1027,139 @@ const styles = StyleSheet.create({
         marginTop: SPACING.xl,
         ...SHADOWS.colored(COLORS.primary),
     },
-    placeBetButtonDisabled: {
+    fundWalletButtonDisabled: {
         backgroundColor: COLORS.textTertiary,
         opacity: 0.6,
     },
-    placeBetButtonText: {
+    fundWalletButtonText: {
         color: COLORS.textInverse,
         fontSize: TYPOGRAPHY.fontSizes.base,
         fontWeight: TYPOGRAPHY.fontWeights.semibold,
         marginLeft: SPACING.sm,
+    },
+    popularPlatforms: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: SPACING.base,
+    },
+    popularPlatformCard: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        alignItems: 'center',
+        minWidth: (width - SPACING.xl * 2 - SPACING.base) / 2,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    popularPlatformLogo: {
+        fontSize: 32,
+        marginBottom: SPACING.sm,
+    },
+    popularPlatformName: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    popularPlatformMin: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+    },
+    infoCards: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: SPACING.base,
+    },
+    infoCard: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        alignItems: 'center',
+        minWidth: (width - SPACING.xl * 2 - SPACING.base * 2) / 3,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    infoTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        fontWeight: TYPOGRAPHY.fontWeights.medium,
+        color: COLORS.textPrimary,
+        marginTop: SPACING.sm,
+        marginBottom: SPACING.xs,
+        textAlign: 'center',
+    },
+    infoDesc: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.textSecondary,
+        textAlign: 'center',
+    },
+
+    // Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: SPACING.xl,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border,
+    },
+    modalTitle: {
+        fontSize: TYPOGRAPHY.fontSizes.lg,
+        fontWeight: TYPOGRAPHY.fontWeights.bold,
+        color: COLORS.textPrimary,
+    },
+    closeButton: {
+        padding: SPACING.xs,
+    },
+    platformsList: {
+        flex: 1,
+        padding: SPACING.xl,
+    },
+    platformCard: {
+        backgroundColor: COLORS.backgroundSecondary,
+        borderRadius: RADIUS.lg,
+        padding: SPACING.base,
+        marginBottom: SPACING.base,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 2,
+        borderColor: 'transparent',
+        ...SHADOWS.sm,
+    },
+    platformCardSelected: {
+        borderColor: COLORS.primary,
+        backgroundColor: COLORS.primaryBackground,
+    },
+    platformInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    platformLogo: {
+        fontSize: 32,
+        marginRight: SPACING.base,
+    },
+    platformDetails: {
+        flex: 1,
+    },
+    platformName: {
+        fontSize: TYPOGRAPHY.fontSizes.base,
+        fontWeight: TYPOGRAPHY.fontWeights.semibold,
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    platformLimits: {
+        fontSize: TYPOGRAPHY.fontSizes.sm,
+        color: COLORS.textSecondary,
+        marginBottom: 2,
+    },
+    platformFunding: {
+        fontSize: TYPOGRAPHY.fontSizes.xs,
+        color: COLORS.primary,
+        textTransform: 'capitalize',
     },
 });
