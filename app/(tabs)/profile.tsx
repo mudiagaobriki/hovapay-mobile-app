@@ -41,6 +41,7 @@ import {
 import { useResendVerificationEmailMutation } from '@/store/api/authApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 import { handleLogout } from '@/utils/auth';
+// import {navigate} from "expo-router/build/global-state/routing";
 
 const { width } = Dimensions.get('window');
 
@@ -1036,6 +1037,7 @@ export default function ProfileScreen() {
                         () => {
                             // You can implement a support screen or open email
                             Linking.openURL('mailto:support@hovapay.com');
+                            // router.push("/chat")
                         }
                     )}
                     {renderMenuItem(

@@ -10,6 +10,7 @@ import { enhancedBillsApi } from './api/enhancedBillsApi';
 import { betWalletApi } from './api/betWalletApi'; // Add this import
 import { profileApi } from './api/profileApi';
 import authReducer from './slices/authSlice';
+import {chatApi} from "@/store/api/chatApi";
 
 // Only persist auth, not the entire store
 const authPersistConfig = {
@@ -25,6 +26,7 @@ const rootReducer = combineReducers({
     [enhancedBillsApi.reducerPath]: enhancedBillsApi.reducer,
     [betWalletApi.reducerPath]: betWalletApi.reducer, // Add bet wallet API reducer
     [profileApi.reducerPath]: profileApi.reducer,
+    [chatApi.reducerPath]: chatApi.reducer,
 });
 
 export const store = configureStore({
@@ -39,7 +41,8 @@ export const store = configureStore({
             billsApi.middleware,
             enhancedBillsApi.middleware,
             betWalletApi.middleware, // Add bet wallet API middleware
-            profileApi.middleware
+            profileApi.middleware,
+            chatApi.middleware
         ),
     devTools: __DEV__,
 });

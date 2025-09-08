@@ -20,7 +20,8 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import {
     usePayBillMutation,
-    useGetWalletBalanceQuery
+    useGetWalletBalanceQuery,
+    useSendBulkSMSMutation,
 } from '@/store/api/billsApi';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/assets/colors/theme';
 
@@ -54,7 +55,7 @@ export default function BulkSMSScreen() {
     const [estimatedCost, setEstimatedCost] = useState(0);
 
     const { data: walletData, refetch: refetchWallet } = useGetWalletBalanceQuery();
-    const [payBill, { isLoading }] = usePayBillMutation();
+    const [payBill, { isLoading }] = useSendBulkSMSMutation();
 
     // const formatCurrency = (amount) => {
     //     return new Intl.NumberFormat('en-NG', {

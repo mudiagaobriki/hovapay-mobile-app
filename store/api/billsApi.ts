@@ -537,6 +537,15 @@ export const billsApi = createApi({
       invalidatesTags: ['Wallet', 'Transactions'],
     }),
 
+    // sendBulkSms: builder.mutation<PayBillResponse, PayBillRequest>({
+    //   query: (data) => ({
+    //     url: '/sms/bulk',
+    //     method: 'POST',
+    //     body: data,
+    //   }),
+    //   invalidatesTags: ['Wallet', 'Transactions'],
+    // }),
+
     getTransactionStatus: builder.query<{
       data: {
         _id: string;
